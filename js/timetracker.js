@@ -18,56 +18,121 @@ var view = "track";
 var defaultSettings = {
   top_level_title : "Client",
   show_billability : true,
+  auto_synch : true,
   reminder_interval : false,
   reminder_title : "Pomodoro Complete!",
   reminder_message : "Please take a five minute break. <b>Breathe, stretch, look around!</b>",
   reminder_delay : 1
 };
 
+var views = {
+  "analyze" : {}, 
+  "taskList" : {},
+  "settingsView" : {}
+}
+
+var analyze = {};
+var taskList = {};
+var settingsView = {};
+
+var flatData = [];
+
 var reminderDelay = 0;
+
+var endPicker = '';
+var startPicker = '';
+
+var lastTaskSaveTime;
+
 
 var types = ['user','client','project','task','session'];
 
 var editFields = {
-
+  settings : {
+    top_level_title : {
+      label : "Top level title",
+      type : "text",
+    },
+    show_billability : {
+      label : "Show billability",
+      type : "boolean"
+    },  
+    auto_synch : {
+      label : "Synch automatically",
+      type : "boolean"
+    },
+    reminder_interval : {
+      label : "Reminder interval",
+      type : "text"
+    }, 
+    reminder_title : {
+      label : "Reminder title",
+      type : "text"
+    },
+    reminder_message : {
+      label : "Reminder message",
+      type : "textarea"
+    }, 
+    reminder_delay : {
+      label : "Reminder delay",
+      type : "text"
+    }   
+  },
   client : {
     name : {
-      displayAs : "Name",
+      label : "Name",
       type : "text"    
     },
     id : {
-      displayAs : "ID",
+      label : "ID",
       type : "text"    
     }  
   },
   project : {
     name : {
-      displayAs : "Name",
+      label : "Name",
       type : "text"    
     },
     id : {
-      displayAs : "ID",
+      label : "ID",
       type : "text"    
     }  
   },
   task : {
     name : {
-      displayAs : "Name",
+      label : "Name",
       type : "text"    
     },
     id : {
-      displayAs : "ID",
+      label : "ID",
       type : "text"    
     },    
     status : {
-      displayAs : "Status",
+      label : "Status",
       type : "select",
-      options : ["Active","On hold","Completed"]    
+      //options : [{text:"On hold", value:"onHold"},{text:"New", value:"new"},{text:"In process", value:"inProcess"},{text:"Completed", value:"completed"}] 
+      options :{"onHold":"On hold", "new":"New", inProcess:"In process", completed:"Completed"}   
+    },    
+    due : {
+      label : "Due by",
+      type : "date",   
+    },     
+    priority : {
+      label : "Priority",      
+      type : "select",
+      options :{"1":"1", "2":"2", "3":"3", "4":"4", "5":"5"},
+      callback : function(){
+      
+      }   
+    },  
+    billable : {
+      label : "Billable",
+      type : "select",
+      options : {"true":"Yes", "false":"No"}    
     },   
-    is_billable : {
-      displayAs : "Billable",
-      type : "select",
-      options : [{text:"Yes", value:true},{text:"No",value:false}]    
+    notes : {
+      label : "Notes",
+      type : "textarea",   
     }  
   }
 };
@@ -83,6 +148,8 @@ Notification.requestPermission();
 /* ############################# INITIALIZE ################################# */
 
 function ttInit(){
+
+    currentView = taskList;
 
     feedbackElement = document.getElementById('feedback');
     
@@ -160,7 +227,9 @@ function ttInit(){
         return false;  
      }
      
-   });  
+   });
+   
+
    
 }
 
@@ -204,34 +273,75 @@ function setClient(clientId){
   
   if(clientId){     
     client_select.value = clientId;  
-  }
-  
-  current_client = ttData.clients[client_select.value];
-  
-  current_project = '';  
-  
-  $("#edit-project-button").hide();
-  
-  // Count how many projects this client has
-  project_count = 0;
-  
-  if(typeof current_client.projects == "object"){
-    for(project_id in current_client.projects){
-       project_count += 1;
-    }
-  }
-
-  if(project_count > 0){
-    updateSelectOptionsFromData('project');
-    cancelAddProject();
   }else{
-    addProjectForm();
-    updateSelectOptionsFromData('project');
+    clientId = client_select.value;
   }
   
-  $('#project-controls').show();
-                                           
-  document.getElementById('task-controls').style.display = "none";
+  dbg("Client ID in setClient()",clientId);
+          
+  delete taskList.projectFilter;
+  
+  if(clientId == "all"){
+                                         
+    delete taskList.clientFilter;
+    current_client = null;
+    
+    gebi('project-controls').style.display = "none"; 
+    
+  }else{
+  
+    
+    gebi('project-controls').style.display = "block"; 
+  
+    current_client = ttData.clients[client_select.value];
+    
+    current_project = '';  
+    
+    $("#edit-project-button").hide();
+    
+    // Count how many projects this client has
+    project_count = 0;
+    
+    if(typeof current_client.projects == "object"){
+      for(project_id in current_client.projects){
+         project_count += 1;
+      }
+    }
+  
+    if(project_count > 0){
+      updateSelectOptionsFromData('project');
+      cancelAddProject();
+    }else{
+      addProjectForm();
+      updateSelectOptionsFromData('project');
+    }
+    
+    $('#project-controls').show();
+  
+
+    //project_select.options = makeSelectOptions(ttData.clients[newVal].projects,true,{text:"- All projects -",value:"all"});             
+    taskList.clientFilter = {
+      type : "client",
+      field : "id",
+      condition : "equals",
+      value : current_client.id
+    };
+      
+  }
+  //project_select.value = 'all';     
+  
+  taskList.filter();
+  taskList.update();
+  
+  $('#task-list').show();
+    
+  if(currentView.setClient){
+    currentView.setClient(clientId);
+  }
+  
+  emitEvent("client","set");
+                                             
+  //document.getElementById('task-controls').style.display = "none";
   
   ttSaveCurrent();
   
@@ -291,22 +401,42 @@ function setProject(id){
   $("#session-start-button").hide();  
   $("#task-edit-button").hide(); 
   
-  if(project_select.value != ''){  
+  if(project_select.value != 'all' && project_select.value != ''){  
    
     $("#edit-project-button").show();
-
   
-    if(project_select[0].value == ''){
-      project_select.remove(0);
-    }
+    //if(project_select[0].value == ''){
+    //  project_select.remove(0);
+    //}
     
     current_project = ttData.clients[client_select.value].projects[project_select.value];       
-    document.getElementById('task-controls').style.display = "block";    
-    updateSelectOptionsFromData('task');
+    //document.getElementById('task-controls').style.display = "block";    
+    //updateSelectOptionsFromData('task');
       
   }
   
-  updateSectionFromData('task');   
+  if(project_select.value == "all" || project_select.value == ""){        
+      //project_select.options = [{text:"- All projects -",value:"all"}];
+      delete taskList.projectFilter;   
+  }else{
+      //project_select.options = makeSelectOptions(ttData.clients[newVal].projects,true,{text:"- All projects -",value:"all"});               
+      taskList.projectFilter = {
+        type : "project",
+        field : "id",
+        condition : "equals",
+        value : current_project.id
+      };
+      
+  }
+       
+  taskList.filter();
+  taskList.update();
+  
+  if(typeof currentView.setProject == "function"){
+     currentView.setProject();
+  }
+  
+  //updateSectionFromData('task');   
   ttSaveCurrent();  
 }
 
@@ -320,16 +450,16 @@ function setProject(id){
 function setTask(id){
   if(id){
     task_id = id;
-    task_select.value = id;
+    //task_select.value = id;
   }else{
-    task_id = task_select.value;  
+    //task_id = task_select.value;  
   }
   
   if(task_id){
     
-    current_task = current_project.tasks[task_id];
-    document.getElementById('session-start-button').style.display = 'inline';
-    $("#task-edit-button").show();
+    //current_task = current_project.tasks[task_id];
+    //document.getElementById('session-start-button').style.display = 'inline';
+    //$("#task-edit-button").show();
       
     ttSaveCurrent();
     
@@ -337,11 +467,30 @@ function setTask(id){
 }
 
 
-function saveNewTask(){
+function saveNewTask(projectId,task_name){
 
-  input = document.getElementById('new-task-input');
-  task_name = input.value;
+    var taskSaveTimeObj = new Date();
+    var taskSaveTime = (taskSaveTimeObj.getSeconds()*1000)+taskSaveTimeObj.getMilliseconds();
+    
+    if((taskSaveTime - lastTaskSaveTime) < 500){
+      dbg("ltst:",lastTaskSaveTime);
+      startGeneralSession(lastTaskSaveId);
+      return;    
+    }
+ 
   
+  
+  if(projectId){
+    var branch = getBranchById("project",projectId);
+    current_client = branch.client;                  
+    current_project = branch.project;
+  }
+
+  if(!task_name){
+    task_name = document.getElementById('new-task-input').value;
+    document.getElementById('new-task-input').value = '';    
+  }
+
   var new_task = {
     'id' : newId(task_name,'task'),
     'name' : task_name,
@@ -349,22 +498,70 @@ function saveNewTask(){
     'sessions' : {}  
   };
   
-  if(gebi("billable-input").checked == true){  
-    new_task.billable = true;  
+  if(gebi("billable-input")){
+    if(gebi("billable-input").checked == true){  
+      new_task.billable = true;  
+    }else{  
+      new_task.billable = false;   
+    }
   }else{  
-    new_task.billable = false;   
-  }   
+      new_task.billable = true;   
+  }
   
-  current_task = new_task; 
-  ttData.clients[current_client.id].projects[current_project.id].tasks[new_task.id] = new_task;  
+  dbg("SaveNewTask",new_task);
+  
+  //quit();
+  /* Everything below here should probably be moved into a global "save" function 
+  that abstracts the data model and forces data object integrity 
+  
+  save("task",new_task);
+  
+  setCurrent("task",new_task.id);
+  
+  
+  */   
+
+ 
+  current_task = new_task;
+  
+  if(typeof current_project.tasks != "object"){ 
+    current_project.tasks = {};
+  }  
+  
+  current_project.tasks[new_task.id] = new_task;
+  
+  ttData.clients[current_client.id].projects[current_project.id].tasks = current_project.tasks;
+   
   ttSave();   
-  updateSelectOptionsFromData('task');  
-  updateSectionFromData('task');   
-  setTask(new_task.id);   
-  input.value = '';
+  //updateSelectOptionsFromData('task');  
+  //updateSectionFromData('task');
+     
+  setTask(new_task.id); 
   
+  lastTaskSaveTime = taskSaveTime; 
+  lastTaskSaveId = new_task.id; 
+  
+  emitEvent("task","added");
+  
+  return new_task.id;
+   
 }
 
+function setTaskComplete(task_id,element){
+
+  task = getItemById("task",task_id);
+  
+  if(task.status == "completed"){
+    task.status = "inProcess";
+  }else{
+    task.status = "completed"; 
+  }   
+  
+  updateItemById("task",task_id,task);
+
+  emitEvent("task","updated");
+
+}
 
 
 
@@ -385,6 +582,21 @@ function startSession(){
   showInSession();  
   ttSave();   
   ttSaveCurrent();
+}
+
+function startGeneralSession(taskId) {
+
+  dbg("Starting session with task ID",taskId);
+         
+   var branch = getBranchById("task",taskId); 
+   current_client = branch.client;                                                  
+   current_project = branch.project;    
+   current_task = branch.task;
+   
+   dbg("Branch",branch);
+   
+   startSession();
+   
 }
 
 function continueSession(){   
@@ -412,18 +624,19 @@ function endSession(){
   current_session.notes = $("#session-notes-input").val();
   
   if(document.getElementById("task-complete-input").checked == true){
-
-    current_task.status = "Completed";   
-    updateDataObject('task',current_task);
+    current_task.status = "completed";   
     task_complete_feedback = " <b>Task complete!<b>";
     feedback_class = "success";    
-    updateSelectOptionsFromData('task');
-    
+    // updateSelectOptionsFromData('task');    
   }else{
+    current_task.status = "inProcess";
     task_complete_feedback = ""; 
     feedback_class = "notice";
-  } 
+  }
+
+  current_task.time += timeDiffSecsFromString(current_session.start_time,current_session.end_time);  
   
+  updateDataObject('task',current_task);     
   updateDataObject('session',current_session); 
   pastSessionId = current_session.id; 
   current_session = '';  
@@ -434,6 +647,14 @@ function endSession(){
   document.title = "Timetracker";  
   edit_button = '<form style="display:inline"><input type="hidden" id="session_id-input" value="'+pastSessionId+'"/><a class="button" onClick="showEditForm(\'session\')">Edit session</a></form>';  
   setFeedback("Session Ended. Duration was "+currentDuration+task_complete_feedback+edit_button,feedback_class);
+  
+  taskList.filter();
+  taskList.update();
+ 
+  
+  if(getSetting("auto_synch") == "true"){
+    synchToServer();
+  }
 
 }
 
@@ -478,7 +699,7 @@ function desktopNotify(message,title,icon) {
 
 function timeFromSeconds(s){
 
-    var hours = parseInt(s/3600) % 24;
+    var hours = parseInt(s/3600);
     var minutes = parseInt(s/60) % 60;
     var seconds = parseInt(s) % 60;
 
@@ -542,13 +763,15 @@ function newId(name,type){
 
 
 
-function dbg(test_data,text){
+function dbg(text,test_data){
 
   if(text){
-    console.log(text);
+    console.log(text,test_data);
+  }else{
+    console.log(test_data);  
   }
   
-  console.log(test_data);
+
   
 }
 
@@ -605,7 +828,7 @@ function updateSelectOptionsFromData(type,idSuffix){
        }     
     }else if(type == "task"){
        for (task_id in current_project.tasks){
-           if(current_project.tasks[task_id].status == "Completed"){
+           if(current_project.tasks[task_id].status == "completed"){
              name_prepend = "[DONE] ";
            }else{
              name_prepend = "";
@@ -628,7 +851,7 @@ function updateSelectOptionsFromData(type,idSuffix){
     
     
     if(!setToCurrent){
-      options.unshift(['','Select '+type+'...']);
+      options.unshift(['all','Select '+type+'...']);
     } 
           
           
@@ -821,8 +1044,6 @@ function ttSaveCurrent(){
             }
             
             
-          }else{
-            dbg('No current task, but project and client');
           }
       
       }else{
@@ -932,6 +1153,89 @@ function saveEditForm(type){
   
 }
 
+function saveGeneralEditForm(type,id){
+
+  if(type == 'settings'){
+    var item = ttData.settings;
+  }else{
+    var item = getItemById(type,id)
+  }
+  
+  /* 
+  for (key in properties){                                                                 
+    if(typeof properties[key] != "object"){
+      dbg("getting props for",key);
+      
+      if(document.getElementById(type+"-"+key+"-edit-input")){
+        item[key] = document.getElementById(type+"-"+key+"-edit-input").value;         
+      }   
+    }
+  }
+  */ 
+   
+  
+  // var item =  JSON.parse(JSON.stringify(item));
+                                        
+  dbg("Type in edit",type);                   
+  dbg("ID in edit",id); 
+  
+  dbg("Item in save before edit",item);  
+  dbg("editFields",editFields[type]);
+  
+  for (key in editFields[type]){
+    if(document.getElementById(type+"-"+key+"-edit-input")){
+      item[key] = document.getElementById(type+"-"+key+"-edit-input").value;
+    }else{
+      dbg("Field not found in edit form:",key);
+    }
+  }        
+      
+    
+                    
+  dbg("Item in save after edit",item);
+  
+  /* This is excessively lame, and is only here because of issues with Vue.js... */
+  if(type == "task"){
+    item.displayStatus = editFields.task.status.options[item.status];
+  }
+  
+  updateItemById(type,id,item);
+  
+  if(type != "session" && type != "settings" && type != "task"){
+    updateSelectOptionsFromData(type);  
+  }                
+     
+  ttSave();  
+  setFeedback('Item updated');  
+  cancelEditForm();
+  
+  if(typeof currentView.update == "function"){
+    currentView.update();
+  }
+} 
+
+function deleteGeneralFromEditForm(type,id){
+
+  dbg('deleteGeneralFromEditForm() with:',[type,id]); 
+
+  deleteItemById(type,id);
+   
+  if(type != "session" && type != "task"){
+    updateSelectOptionsFromData(type);   
+  }
+   
+  ttSave(); 
+  cancelEditForm(); 
+  
+  setFeedback(type+' deleted.');
+  
+  // Temporary test mockup of event-based strategy...
+  
+  emitEvent("task","deleted"); 
+  
+} 
+
+
 function deleteFromEditForm(type){
 
   dbg(type,'Deleting type:');
@@ -970,18 +1274,100 @@ function deleteFromEditForm(type){
     updateDataObject(update_type,update_data);   
   }
    
-  if(type != "session"){
+  if(type != "session" && type != "task"){
     updateSelectOptionsFromData(type);   
   }
 
+  if(typeof currentView.update == "function"){
+    currentView.update();
+  }
    
   ttSave(); 
   cancelEditForm(); 
   setFeedback(type+' deleted.');
   
+} 
+
+/* Edit form that doesn't require current values to be set */
+
+function showGeneralEditForm(type,id){
+   dbg('showGeneralEditForm called with type',type); 
+   dbg('id',id);
+   
+   edit_element = document.getElementById("edit-popup");
+                      
+  $("#edit-popup").html("<form>");
+  
+  dbg($("#edit-popup"));
+
+  properties = getItemById(type,id);
+  
+  
+  for (key in editFields[type]){
+  
+    var field = editFields[type][key];
+                                                                     
+    if(typeof properties[key] != "object" && properties[key]){
+      var val = properties[key];
+    }else if(field.defaultVal){
+      var val = field.defaultVal;
+    }else{
+      var val = "";
+    }
+    
+    if(field.type == "text"){
+         $("#edit-popup").append('<div>'+field.label+' <input type="text" value="'+val+'" id="'+type+'-'+key+'-edit-input"/></div>');
+    }else if(field.type == "select"){
+    
+         var fieldDiv = document.createElement('div'); 
+         
+         fieldDiv.innerHTML = field.label
+         
+         var select = document.createElement('select');
+         select.id = type+'-'+key+'-edit-input';
+         /*
+         for (var optkey in field.options){
+            if(typeof field.options[optkey] == "object"){
+              var optionVal = field.options[optkey].value; 
+              var optionTxt = field.options[optkey].text;
+            }else{                           
+              var optionVal = optionTxt = field.options[optkey];          
+            }
+            var option = new Option(optionTxt,optionVal);
+            select.options.add(option);               
+         }
+         */
+         
+         for (var optkey in field.options){
+            var option = new Option(field.options[optkey],optkey);
+            select.options.add(option);               
+         }         
+         
+         select.value = val;
+         
+         fieldDiv.appendChild(select);         
+         $("#edit-popup").append(fieldDiv);
+          
+    }else if(field.type == "textarea"){
+         $("#edit-popup").append('<div>'+field.label+' <textarea id="'+type+'-'+key+'-edit-input">'+val+'</textarea></div>');
+    }   
+ 
+  }
+    
+  $("#edit-popup").append('<div>');
+  $("#edit-popup").append('<a class="button" onClick="saveGeneralEditForm(\''+type+'\',\''+id+'\')">Save</a>');
+  $("#edit-popup").append('<a class="button" onClick="cancelEditForm()">Cancel</a>');
+  
+  if(type != "settings"){
+    $("#edit-popup").append('<a class="button red" onClick="deleteGeneralFromEditForm(\''+type+'\',\''+id+'\')">Delete Item</a></div></form>');
+  }  
+  
+  $("#modal-bg").show(); 
+  $("#edit-popup").show();                  
+
 }
 
-function showEditForm(type){
+function showEditForm(type,id){
    dbg('showEditForm called with type',type);
    
    edit_element = document.getElementById("edit-popup");
@@ -1378,13 +1764,505 @@ function makeSelectOptions(itemsObj,isForVue,prepend){
 
 function setView(view){
 
-  if(view == "analyze"){
+    if(typeof currentView.hide == "function"){
+      currentView.hide();
+    }
+    
+    if(view == "analyze"){
+      currentView = analyze;
+    }else if(view == "taskList"){
+      currentView = taskList;
+    }else if(view == "settingsView"){
+      currentView = settingsView;
+    }
+    
+    viewElements = document.getElementsByClassName("view-container");
+
+    for (var i = 0; i < viewElements.length; ++i){
+       if(viewElements[i].id == view+"-view"){
+          viewElements[i].style.display = "block";
+       }else{
+          viewElements[i].style.display = "none";       
+       }
+    }
+    
+    if(typeof currentView.show == "function"){
+      currentView.show();
+    }
+}
+
+
+
+function filterFlatData(fs){
+
+   tempTableData = [];
+   
+   totalTime = 0;
+   totalBillableTime = 0;
+   
+   for (var row in flatData){          
+   
+     if (fs.clientId != "all" && flatData[row].client_id != fs.clientId){ continue; } 
+     if (fs.projectId != "all" && flatData[row].project_id != fs.projectId){ continue; }
+     //if (fs.taskId != "all"  && flatData[row].task_id != fs.taskId){ continue; }     
+     if (fs.startTime != "all" && flatData[row].start_time < fs.startTime){ continue; }      
+     if (fs.endTime && flatData[row].end_time > fs.endTime){ continue; } 
+                                                                                    
+
+     tempTableData.push(flatData[row]);
+     
+     totalTime += flatData[row].duration;
+     
+     if(flatData[row].billable){
+        totalBillableTime += flatData[row].duration;
+     }
+           
+   }
+              
+   return [tempTableData,totalTime,totalBillableTime];
+} 
+
+    
+function loopData(fs,func){
   
+  if (func && typeof func != "function"){
+      throw new TypeError();  
+  } 
+    
+  clientLoop: for (var client_id in ttData.clients){
+  
+    // Filter
+    for(key in fs){
+      if(fs[key].type == "client"){ 
+        if(!filterMatch(fs[key].value,ttData.clients[client_id][fs[key].field],fs[key].condition)){
+          continue clientLoop;
+        }
+      }
+    }
+    
+    // Callback
+    if(func){      
+      res = func.call({level:"client", client: ttData.clients[client_id]});
+      if (res == "break"){
+        return;
+      }     
+    }
+ 
+    if(typeof ttData.clients[client_id].projects == "object"){
+       projects = ttData.clients[client_id].projects;
+       projectLoop: for (var project_id in projects){
+       
+        // Filter
+        for(key in fs){
+          if(fs[key].type == "project"){ 
+            if(!filterMatch(fs[key].value,projects[project_id][fs[key].field],fs[key].condition)){
+              continue projectLoop;
+            }
+          }
+        }
+        
+        // Callback
+        if(func){
+          res = func.call({level:"project", client : ttData.clients[client_id],project : projects[project_id]});
+          if (res == "break"){
+            return;
+          }     
+        }
+             
+        if(typeof projects[project_id].tasks == "object"){
+          tasks = projects[project_id].tasks;       
+          taskLoop: for (var task_id in tasks){
+          
+           
+            // Filter
+            for(key in fs){
+              if(fs[key].type == "task"){ 
+                if(!filterMatch(fs[key].value,tasks[task_id][fs[key].field],fs[key].condition)){
+                  continue taskLoop;
+                }
+              }
+            }          
+          
+          
+            // Callback
+            if(func){
+              res = func.call({level:"task", client : ttData.clients[client_id],project : projects[project_id], task:  tasks[task_id]});
+              if (res == "break"){
+                
+                return;
+              }     
+            }          
+          
+           
+            if(typeof tasks[task_id].sessions == "object" && getMemberCount(tasks[task_id].sessions) > 0){           
+              for (var session_id in tasks[task_id].sessions){              
+                session = tasks[task_id].sessions[session_id];
+                             
+              }
+            }
+          }
+        }
+      }   
+    }    
+  }
+}
+
+
+function filterMatch(filterValue,dataValue,condition){
+
+  if(condition == "equals"){
+    if(filterValue == dataValue){
+      return true;
+    }
+  }else if(condition == ">"){
+    if(filterValue < dataValue){
+      return true;
+    }  
+  }else if(condition == "<"){
+    if(filterValue > dataValue){
+      return true;
+    }  
+  }else if(condition == "includes"){
+    if(dataValue.indexOf(filterValue) > -1){
+      return true;
+    }  
+  }
+  
+}
+
+// Get a particular item out of the data array, regardless of what's current
+function getItemById(type,id){
+   
+  var wantedItem = {};
+  
+  loopData([{type:type,value:id,field:"id",condition:"equals"}],function(){    
+    if(this.level == type){
+      wantedItem = this[type];
+      return "break";      
+    }
+  });
+  
+  return wantedItem;
+}
+// Get a particular item out of the data array, regardless of what's current
+function getBranchById(type,id){
+   
+  var branch = {};
+  
+  loopData([{type:type,value:id,field:"id",condition:"equals"}],function(){    
+    if(this.level == type){
+      branch = this;
+      return "break";      
+    }
+  });
+  
+  return branch;
+}
+
+function updateItemById(type,id,data){
+
+    dbg("updateItemById(type,id,data)",[type,id,data]);
+
+    if(type == 'client'){
+      ttData.cleints[id] = data;
+    }else{
+      loopData([{type:type,value:id,field:"id",condition:"equals"}],function(){
+        if(this.level == type){
+          if(type == "project"){
+            ttData.clients[this.client.id].projects[this.project.id] = data;        
+          }else if(type == "task"){
+            ttData.clients[this.client.id].projects[this.project.id].tasks[this.task.id] = data;         
+          }else if(type == "session"){
+            ttData.clients[this.client.id].projects[this.project.id].tasks[this.task.id].sessions[this.session.id] = data;         
+          }
+          return "break"; 
+        } 
+      });    
+    }  
+} 
+    
+function deleteItemById(type,id){
+    if(type == 'client'){
+      delete ttData.cleints[id];
+    }else{
+      loopData([{type:type,value:id,field:"id",condition:"equals"}],function(){
+        if(this.level == type){
+          if(type == "project"){
+            delete ttData.clients[this.client.id].projects[this.project.id];        
+          }else if(type == "task"){
+            delete ttData.clients[this.client.id].projects[this.project.id].tasks[this.task.id];         
+          }else if(type == "session"){
+            delete ttData.clients[this.client.id].projects[this.project.id].tasks[this.task.id].sessions[this.session.id];         
+          }
+          return "break"; 
+        }         
+      });    
+    }  
+} 
+
+function prettyTime(s){
+    var hours = parseInt(s/3600) % 24;
+    var minutes = parseInt(s/60) % 60;
+    var seconds = parseInt(s) % 60;
+    
+    hrsTxt = " hour";  
+    minsTxt = " minute";
+    
+    if(hours > 1){
+      hrsTxt += "s";  
+    }
+    
+    if(minutes > 1){
+      minsTxt += "s";  
+    }
+    var out = '';
+       
+    if(hours){
+      out += hours.toString()+hrsTxt+" ";
+    }
+    if(minutes){
+      out += minutes.toString()+minsTxt;
+    }
+    if(!minutes && !hours){
+      out = seconds.toString()+" seconds";
+    }
+    
+    return out;
+} 
+
+
+/*  TASK LIST FUNCTIONS */
+
+function filterTaskList(){
+            
+    taskList.tasks = [];
+              
+    var fs = [];
+    
+    if(taskList.clientFilter){
+      fs.push(taskList.clientFilter);
+    }
+    if(taskList.projectFilter){
+      fs.push(taskList.projectFilter);
+    }
+    
+    dbg("Filtering task list",fs);
+    
+     
+    loopData(fs,function(){ 
+      if(this.task){ 
+        
+        if(!this.task.time){
+          this.task.time = 0;
+          for (var sesId in this.task.sessions){
+          
+            this.task.time += timeDiffSecsFromString(this.task.sessions[sesId].start_time,this.task.sessions[sesId].end_time);
+          }
+        }
+        
+        if(this.task.time > 0){
+          this.task.prettyTime = prettyTime(this.task.time);
+        }else{
+          this.task.prettyTime = '';
+        }
+        
+        this.task.displayStatus = editFields.task.status.options[this.task.status];
+                            
+        taskList.tasks.push(this.task);                  
+      }                         
+    });
+    
+                
+   if(taskList.tasks.length < 1){
+     document.getElementById("no-data-found-table").style.display = "table-row";
+   }else{
+     document.getElementById("no-data-found-table").style.display = "none";           
+   }
+   
+   taskList.sort();
+                                  
+}
+
+taskList.sort = function(field){
+  sortTaskList(field);
+};
+
+taskList.filter = function(field){
+  filterTaskList(field);
+};
+
+
+taskList.hideNewTaskForm = function(){
+  gebi("task-form").style.display = "none";
+}
+       
+function sortTaskList(field){
+
+    dbg("Sorting task list by",field);
+
+    if(field){
+      taskList.sortBy = field;
+    }
+
+    taskList.tasks.sort(function(a, b) {
+   
+      if(!a[taskList.sortBy]){
+        a[taskList.sortBy] = '';
+      }                   
+      if(!b[taskList.sortBy]){
+        b[taskList.sortBy] = '';
+      }
+      
+      //dbg("Sorting: "+JSON.stringify(a)+" against:"+JSON.stringify(b));
+      
+      return a[taskList.sortBy].toString().localeCompare(b[taskList.sortBy].toString());          
+   });
+   
+   taskList.update();                     
+}
+
+taskList.update = function(){ 
+
+   dbg("Updating DOM with "+taskList.tasks.length.toString()+" tasks");
+                                                     
+   var addTaskForm = gebi("tasklist-new-task-form");
+   var templateEl = gebi('task-list-item-template');
+   
+   
+   var template = templateEl.innerHTML;
+   
+   var listContainer = templateEl.parentNode; 
+   
+   listContainer.innerHTML = '';
+   
+   if(gebi("project-select").value != "all" && gebi("project-select").value != ""){
+     addTaskForm.style.display = "block";  
+   }else{
+     addTaskForm.style.display = "none";     
+   }
+   
+   listContainer.appendChild(addTaskForm); 
+   listContainer.appendChild(templateEl);
+
+  for (taskListKey in taskList.tasks){
+     var task = taskList.tasks[taskListKey]; 
+     
+     if(taskList.hideCompletedTasks == false || task.status != "completed"){
+  
+       var templateData = [];   
+              
+       for (taskKey in task){ 
+          templateData.push({placeholder: "{{task."+taskKey+"}}", value: task[taskKey]});     
+       }
+       
+       if(task.status == "completed"){       
+         var completedFlag = "checked";       
+       }else{    
+         var completedFlag = "";       
+       }
+       
+       var completedInput = "<input type=\"checkbox\" name=\"task-completed\" "+completedFlag+" onClick=\"setTaskComplete('"+task.id+"')\"/>";
+       
+       templateData.push({placeholder:"{{checkCompleted}}",value: completedInput});  
+       
+       
+       if(task.prettyTime){       
+         var metaSeparator = "|";       
+       }else{    
+         var metaSeparator = "";       
+       }
+              
+       templateData.push({placeholder:"{{metaSeparator}}",value: metaSeparator});      
+            
+       var taskEl = templateEl.cloneNode(false);
+       taskEl.id = "task-"+task.id;
+       taskEl.style.display = "block";
+       taskEl.innerHTML = fillTemplate(templateData,template);
+       templateEl.parentNode.appendChild(taskEl);     
+     }
+  }
+  
+  templateEl.style.display = "none";
+  
+}
+
+function clearTemplate(templateElId){
+   var template = gebi(templateElId);
+   var parent = template.parentNode;
+   
+   var oldItems = parent.getElementsByClassName(templateElId+"-clone");
+   
+   while(oldItems.length > 0){
+       oldItems[0].parentNode.removeChild(oldItems[0]);
+   }
+}
+
+
+var template = function selfTemplate (data,templateElId){
+
+   if(data instanceof Array){
+    
+      clearTemplate(templateElId);
+      
+      for(i= 0; i < data.length; i++){
+        selfTemplate(data[i],templateElId);
+      }
+   }else{
+
+     dbg("template()",data);
+    
+     var template = gebi(templateElId);
+     var parent = template.parentNode;
+     var code = template.innerHTML;
+  
+     templateData = [];
+     
+     for(var name in data){
+        templateData.push({placeholder: "{{"+name+"}}", value: data[name]})
+     }
+     
+        
+     var outputEl = template.cloneNode();
+     
+     outputEl.innerHTML = fillTemplate(templateData,code);
+     
+     if(data.id){
+        outputEl.id = data.id;   
+     }
+     
+     outputEl.className += " "+templateElId+"-clone";
+     if(template.getAttribute("data-clone-display")){
+        outputEl.style.display = template.getAttribute("data-clone-display");   
+     }else{ 
+        outputEl.style.display = null;  
+     }
+     
+     parent.appendChild(outputEl);
+   
+   }
+    
+}
+
+function fillTemplate(data,code){
+
+  for(var pairKey in data){
+    var re = new RegExp (data[pairKey].placeholder, 'g');
+    code = code.replace(re,data[pairKey].value);
+  }
+  return code;
+}
+
+taskList.hideCompleted = function(){
+   taskList.hideCompletedTasks = gebi("hide-completed").checked ? true : false;   
+   taskList.update();
+} 
+
+
+/* ANALYZE VIEW */
+
+analyze.show = function(){
+
     makeFlatData();
-  
-    gebi("track-view").style.display = "none"; 
-    gebi("organize-view").style.display = "none"; 
-    gebi("analyze-view").style.display = "block";
     
     var tableFields = {
       client:"Client",
@@ -1394,148 +2272,252 @@ function setView(view){
       duration:"Duration"
     };
     
-    //addTableHeaders('datatable',tableFields);   
-            
-    analyzeView = '';
+
     
-    var clientFilterSelVal;
+    analyze.totals = {};             
+    analyze.totals.totalTimeHMS = '';
+    analyze.totals.totalBillableTimeHMS = '';               
+    analyze.tableData = flatData; 
+          
+    analyze.filters = {
+            clientId : current_client.id || "all",
+            projectId : current_project.id || "all", 
+            taskId : "all",
+            startTime : "all",
+            endTime : "all"       
+    }
+
+       
+    if(!analyze.startPicker){   
+      analyze.startPicker = new Pikaday({
+          field: document.getElementById('filter-start-time'),
+          format: 'YYYY-MM-DD',
+          onSelect: function() {
+             analyze.filters.startTime = document.getElementById('filter-start-time').value;
+             analyze.filter();
+          }
+      });
+    }
     
-    if(typeof current_client == "object"){
-      clientFilterSelVal = current_client.id;
-    }else{
-      clientFilterSelVal = "all";
+    if(!analyze.endPicker){
+      analyze.endPicker = new Pikaday({
+          field: document.getElementById('filter-end-time'),
+          format: 'YYYY-MM-DD',
+          onSelect: function() {
+             analyze.filters.endTime = document.getElementById('filter-end-time').value+" 23:23:59";
+             analyze.filter();
+          }
+      });
     }
      
-    var analyzeView = new Vue({
-      el: '#analyze-view',
-      data: {
-        client_select: {
-            value: clientFilterSelVal,
-            options: makeSelectOptions(ttData.clients,true,{text:"- All clients -",value:"all"})
-        },
-        
-        project_select:{
-          value : current_project.id || "all",
-          options : makeSelectOptions(current_client.projects,true,{text:"- All projects -",value:"all"})    
-        },
-        
-        totalTimeHMS: '',
-        totalBillableTimeHMS: '', 
-        
-        tableData : flatData,
-        
-        filters : {
-          clientId : current_client.id || "all",
-          projectId : current_project.id || "all", 
-          taskId : "all",
-          startTime : "all",
-          endTime : "all"       
-        }
-        
-        
-      },
-      
-      
-      methods: {
-        filter : function (){
-        
-           fs = analyzeView.filters;
-    
-           tempTableData = [];
-           
-           totalTime = 0;
-           totalBillableTime = 0;
-           
-           for (row in flatData){          
-           
-             if (fs.clientId != "all" && flatData[row].client_id != fs.clientId){ continue; } 
-             if (fs.projectId != "all" && flatData[row].project_id != fs.projectId){ continue; }
-             //if (fs.taskId != "all"  && flatData[row].task_id != fs.taskId){ continue; }     
-             if (fs.startTime != "all" && flatData[row].start_time < fs.startTime){ continue; }      
-             if (fs.endTime && flatData[row].end_time > fs.endTime){ continue; } 
-                                                                                            
-
-             tempTableData.push(flatData[row]);
-             
-             totalTime += flatData[row].duration;
-             
-             if(flatData[row].billable){
-                totalBillableTime += flatData[row].duration;
-             }
-                   
-           }
-           
-                                                 
-           analyzeView.totalTimeHMS = timeFromSeconds(totalTime);                                            
-           analyzeView.totalBillableTimeHMS = timeFromSeconds(totalBillableTime);            
-           analyzeView.tableData = tempTableData;
-           
-           if(!tempTableData[0]){
-             document.getElementById("no-data-found-table").style.display = "table-row";
-           }else{
-             document.getElementById("no-data-found-table").style.display = "none";           
-           } 
-           
-           console.log(analyzeView.tableData);            
-        
-        }     
-      }      
-    });
-    
-    analyzeView.$watch('client_select.value', function (newVal, oldVal) {
-    
-        console.log("New client select value detected: "+newVal);
-        
-        if(newVal == "all"){        
-          analyzeView.project_select.options = [{text:"- All projects -",value:"all"}];        
-        }else{
-          analyzeView.project_select.options = makeSelectOptions(ttData.clients[newVal].projects,true,{text:"- All projects -",value:"all"});
-        }
-        analyzeView.project_select.value = 'all';
-        
-        analyzeView.filters.clientId = newVal;
-        
-        analyzeView.filter();    
-        
-    });    
-      
-    analyzeView.$watch('project_select.value', function (newVal, oldVal) {
-    
-        analyzeView.filters.projectId = newVal;
-        
-        analyzeView.filter();  
-        
-    });
-   
-        
-    startPicker = new Pikaday({
-        field: document.getElementById('filter-start-time'),
-        format: 'YYYY-MM-DD',
-        onSelect: function() {
-           analyzeView.filters.startTime = document.getElementById('filter-start-time').value;
-           analyzeView.filter();
-        }
-    });
-    
-    endPicker = new Pikaday({
-        field: document.getElementById('filter-end-time'),
-        format: 'YYYY-MM-DD',
-        onSelect: function() {
-           analyzeView.filters.endTime = document.getElementById('filter-end-time').value+" 23:23:59";
-           analyzeView.filter();
-        }
-    });
-    
-    analyzeView.filter();           
-    
-  }else{
-    endPicker.destroy();
-    startPicker.destroy();
-  
-    gebi("track-view").style.display = "block"; 
-    gebi("organize-view").style.display = "none"; 
-    gebi("analyze-view").style.display = "none";
-      
-  }  
-  
+    analyze.filter();           
 }
+
+analyze.setClient = function(clientId){
+    analyze.filters.clientId = current_client.id || "all";
+    analyze.filter(); 
+}
+
+analyze.setProject = function(projectId){
+    analyze.filters.projectId = current_project.id || "all";
+    analyze.filter(); 
+}     
+      
+analyze.filter = function (){
+    
+   fs = analyze.filters;
+
+   tempTableData = [];
+   
+   totalTime = 0;
+   totalBillableTime = 0;  
+   
+   var projectTotal = 0; 
+   var lastProjectId = 0;
+   var clientTotal = 0; 
+   var lastClientId = 0;
+   
+   for (row in flatData){          
+   
+     if (fs.clientId != "all" && flatData[row].client_id != fs.clientId){ continue; } 
+     if (fs.projectId != "all" && flatData[row].project_id != fs.projectId){ continue; }
+     //if (fs.taskId != "all"  && flatData[row].task_id != fs.taskId){ continue; }     
+     if (fs.startTime != "all" && flatData[row].start_time < fs.startTime){ continue; }      
+     if (fs.endTime && flatData[row].end_time > fs.endTime){ continue; }
+     
+     clientTotal += flatData[row].duration;
+      
+     if(flatData[row].client_id != lastClientId){ 
+       dbg("New client detected");
+       clientTotalRow = {client: flatData[row].client,project:"",task:"",start_time:"",durationHMS:timeFromSeconds(clientTotal)};
+       clientTotal = 0;
+       lastClientId = flatData[row].client_id;                                              
+       tempTableData.push(clientTotalRow);
+     }
+          
+     projectTotal += flatData[row].duration;
+      
+     if(flatData[row].project_id != lastProjectId){
+       dbg("New project detected");
+       projectTotalRow = {client: flatData[row].client,project:flatData[row].project,task:"",start_time:"",durationHMS:timeFromSeconds(projectTotal)};
+       projectTotal = 0;
+       lastProjectId = flatData[row].project_id;                                               
+       tempTableData.push(projectTotalRow);
+     }
+                                                                                    
+     tempTableData.push(flatData[row]);
+     
+     totalTime += flatData[row].duration;
+     
+     if(flatData[row].billable){
+        totalBillableTime += flatData[row].duration;
+     }
+           
+   }
+   
+   dbg("Temp data in analyze.filter",tempTableData);
+   
+                                         
+   analyze.totals.totalTimeHMS = timeFromSeconds(totalTime);                                            
+   analyze.totals.totalBillableTimeHMS = timeFromSeconds(totalBillableTime);            
+   analyze.tableData = tempTableData;
+   
+   clearTemplate("analyze-data-row-template");
+   
+   for(var i = 0; i < analyze.tableData.length; i++){          
+      template(analyze.tableData[i],"analyze-data-row-template");       
+   }
+   
+   clearTemplate("analyze-totals-template");
+   template(analyze.totals,"analyze-totals-template");
+   
+   if(!tempTableData[0]){
+     document.getElementById("no-data-found-table").style.display = "table-row";
+   }else{
+     document.getElementById("no-data-found-table").style.display = "none";           
+   }        
+          
+}  
+
+settingsView.show = function(){
+  
+ 
+  if(ttData.settings.length != defaultSettings.length){
+      for (key in defaultSettings){
+        if(!ttData.settings[key]){
+           ttData.settings[key] = defaultSettings[key]
+        }      
+      }    
+  }
+  
+  var templateData = [];
+  
+  for(field in editFields.settings){
+     var templateRow = {
+       label: editFields.settings[field].label,
+       input: makeFormInput(editFields.settings[field].type,{
+         value:ttData.settings[field],
+         id: "settings-"+field+"input"
+       }).outerHTML         
+     };
+     
+     templateData.push(templateRow);
+  
+  }
+  
+  
+  template(templateData,"settings-item-template");
+  
+  gebi("client-controls").style.display = "none";  
+  gebi("project-controls").style.display = "none";
+    
+}
+settingsView.hide = function(){
+  
+  gebi("client-controls").style.display = "block";  
+  gebi("project-controls").style.display = "block";
+}
+settingsView.save = function(){
+
+  for(field in editFields.settings){
+     ttData.settings[field] = gebi("settings-"+field+"input").value;
+  }
+  
+  dbg("Settings after save",ttData.settings);
+  ttSave();  
+  setFeedback('Settings updated'); 
+}
+
+
+
+makeFormInput = function selfMakeFormInput (type,attribs){
+
+   var input;
+   
+  if(type == "boolean"){
+    attribs.options = {"true":"Yes","false":"No"};
+    type = "select";
+  }  
+    
+  if(type == "text"){
+    input = document.createElement("input");
+    input.type = "text";
+  }else if(type == "select"){
+    input = document.createElement('select');
+    for (var optkey in attribs.options){
+      var option = new Option(attribs.options[optkey],optkey);
+      input.options.add(option);               
+    } 
+  }else if(type == "textarea"){
+    input = document.createElement("textarea");
+    input.innerHTML = attribs.value || "";    
+  }
+  
+  dbg("incoming attributes",attribs); 
+  dbg("input element before setting attribs",input);
+  
+  inputAttributes = ["id","value","name","className","style"];
+  
+  for (i = 0; i < inputAttributes.length; i++){
+  
+     var item = inputAttributes[i];
+    
+     if(attribs[item]){
+       input.setAttribute(item,attribs[item]);
+     }
+  }
+       
+  dbg("Input after setting attributes",input);
+  return input;
+}
+
+
+function emitEvent(type,action){
+  if(type == "task"){
+    if(action == "deleted" || action == "edited" || action == "added" || action == "updated" ){
+      if(typeof currentView.filter == "function"){
+         currentView.filter();
+      }
+      if(typeof currentView.update == "function"){
+         currentView.update();
+      }      
+      
+    }    
+  }else if(type == "client"){
+    if(action == "set"){
+      setProject("all");
+      if(typeof currentView.filter == "function"){
+         currentView.filter();
+      }
+      if(typeof currentView.update == "function"){
+         currentView.update();
+      } 
+    
+    }
+  }
+}
+
+
+
+ 
+                   

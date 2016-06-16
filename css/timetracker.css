@@ -1,9 +1,16 @@
 body{
-font-family: 'Roboto', 'sans-serif';
-margin: 30px; 
+  font-family: 'Roboto', 'sans-serif';
+  margin: 0; 
+  -webkit-box-sizing: border-box; /* Safari/Chrome, other WebKit  */
+  -moz-box-sizing: border-box;    /* Firefox, other Gecko         */
+  box-sizing: border-box;
 
 }
-
+div, a, input, select{
+  box-sizing: border-box;
+  padding:0;
+  margin:0;
+}
 #container{
   max-width: 700px;
 }
@@ -23,6 +30,10 @@ td.datacell{
 td.header{
   font-weight: bold;
   background: #eeeeee;
+}
+
+#header h1{
+ margin:0;
 }
 
 #feedback{
@@ -48,6 +59,7 @@ td.header{
   margin-top: 20px;
 }
 
+
 .button{
   padding: 3 10 3 10px;
   border: 1px solid #bbbbbb;
@@ -57,6 +69,38 @@ td.header{
   cursor:pointer;
   font-size: 1rem;
   color: #333;
+}
+/*
+.field-end-button{
+  display: inline-block;
+  border-radius: 0px 5px 5px 0;
+  width: 6%;
+  padding-top: 5px;
+  padding-bottom: 6px;
+  padding-left: 15px;
+  margin-left:0px;     
+  margin-right:0px;
+}
+*/
+
+.field-end-button{
+  display: inline-block;
+
+  width: 15%;
+  padding-top: 5px;
+  padding-bottom: 6px;
+  padding-left: 0;   
+  padding-right: 0;
+  margin:0;     
+  border: 0;
+  text-align:center;
+}
+
+
+.glommed-field-div{
+  border-radius: 5px;
+  border: 1px solid #ccc;
+  padding-left: 0px;
 }
 
 .button:active{
@@ -72,22 +116,57 @@ form{
   padding: 0;
 }
 
-input[type=text], select{  
+input[type=text], select, textarea{  
   font-size: 1rem;
   padding: 3 10 3 10px;
   border: 1px solid #bbbbbb;
-  margin: 10px;
+  margin-top: 10px;    
+  margin-bottom: 10px;
+  margin-left:2%;
+  margin-right:2%;
   background-color: #fbfbfb;
   display: inline-block;
   color: #333333;
-  width: 250px;
+  /* width: 45%; */
+  
 }
-
-input[type=checkbox]{
-  margin: 10px;
+      
+#edit-popup input,#edit-popup select,#edit-popup textarea{
+  width: 60%;
+}      
+      
+@media only screen and (max-width: 500px) {
+   input[type=text], select, textarea{
+     width: 100%;
+   }
 }
-                                                          
-
+  
+#edit-popup{
+  text-align:right;
+}
+/*                                                    
+input.button-end-field{
+  display: inline-block;
+  margin: 7px 0 7px 0px;
+  border-right: 0;
+  padding: 8px 5px 6px 9px;
+  border-radius: 5px 0 0 5px;
+  width: 90%;
+  background-color: #fafafa;
+}
+*/
+input.button-end-field{
+  display: inline-block;
+  margin: 0;
+  border: 0;
+  
+  border-radius: 5px 0 0 5px;
+  padding: 0px 5px 0px 14px;
+  width: 85%;
+}
+input.button-end-field:active{   
+  border: 0;
+}
 
 .section-title{  
   padding: 5px;
@@ -224,4 +303,147 @@ a.view-switch:hover{
 a.current-view{
 color: #000;
 
+}
+
+.task{
+  padding: 7px 10px 7px 10px;
+  margin: 14px 0px 14px 0px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+}
+
+.task:hover{
+  background-color: #eef;
+}
+
+.Completed{
+  color: #999;
+}
+
+#task-list{
+  margin-top: 30px;
+}
+
+.task-meta{
+  font-size: 0.8em;
+  color: #777;
+  display: inline-block;
+  margin-left: 20px;
+}
+
+
+/* Control Box Styles */
+#client-project-controls, .view-container, #header{
+  margin: 3%;
+}
+
+.control-container:first-child{
+  margin-right: 4%;
+}
+
+
+
+.control-container{
+  width: 48%;
+  float: left;
+  border: 1px solid #cccccc;
+  padding: 0;
+  height: 53px;
+  margin-top: 20px;
+}
+
+.control-container select, .control-container input{
+  width: 73%;    
+  height: 30px;   
+  margin:0;
+  margin-top: 4px;
+  margin-bottom: 10px;
+  margin-left:3%;
+  border: 0;
+  padding: 2;
+  font-size: 1.1em;
+}
+
+.control-container a:first-of-type{
+  border-radius: 0 4px 4px 0;
+  
+}
+
+.control-container .button{
+  float: right;
+  height: 51px;
+  width: 10%;
+  padding: 0;
+  padding-top: 17px;           
+  margin: 0;
+  margin-top: -7px !important;
+  background-color: #f1f1f1;  
+  border: 0;
+  border-left: 1px solid #e8e8e8;
+  color: #888;
+  text-align:center;
+}
+
+
+.control-container .button:hover{
+  background-color: #ccc;           
+}
+
+.control-title-container{
+  margin-top: -13px;
+  margin-left: 20px;
+  margin-bottom: 0;
+  color: #bbbbbb; 
+}
+
+.control-title{  
+  font-size: 0.95em;
+  padding-left: 5px;  
+  padding-right: 5px; 
+  padding-bottom: 0;
+  background-color: #fff;
+  display: inline-block; 
+}
+
+.rounded{
+  border-radius: 5px;
+}
+
+
+@media all and ( max-width: 600px ) {
+  .control-container { 
+    float: none; 
+    width: auto;
+    margin-bottom: 30px; 
+  }
+
+}
+
+.clearfix{
+  clear: both;
+}
+
+.half-width{
+  width: 45%;
+  float:left;
+}
+@media all and ( max-width: 600px ) {
+  .half-width{
+    float: none; 
+    width: auto; 
+  }
+  .control-container:first-child{
+    margin-right: 0;
+  }
+}
+
+#hide-completed{
+  margin-left: 30px;
+  margin-right: 10px;
+  margin-top: 5px;
+}
+
+#taskList-options{
+  color: #666;
+  font-size: 0.9em;
 }
