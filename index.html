@@ -19,23 +19,23 @@
     <title>Timetracker</title>
   </head>
   <body onLoad="ttInit();">
-    <div id="header">
-      <h1 style="float: left;">timetracker</h1>
-      <div id="view-links" style="float:left;">
-      <a href="#void" class="view-switch" onClick="setView('taskList')"><i class="fa fa-clock-o fa-lg"></i>
-Track</a>
-      <a href="#void" class="view-switch" onClick="setView('analyze')"><i class="fa fa-bar-chart fa-lg"></i>
-Analyze</a>     
-      <a href="javascript:void(0)" class="view-switch" id="settings-button" title="Settings" onClick="setView('settingsView')"><i class="fa fa-wrench fa-lg"></i> Settings</a> 
-      <!-- a href="javascript:void(0)" class="view-switch" id="settings-button" title="Settings" onClick="showEditForm('settings')"><i class="fa fa-wrench fa-lg"></i> Settings</a -->
-      
-      </div>
-      
-
-    </div>
-    <div class="clearfix"></div>
     
     <div id="container">
+      <div id="header">
+        <h1 style="float: left;">timetracker</h1> 
+        <div id="view-links">    
+        <a href="javascript:void(0)" class="view-switch" id="settings-button" title="Settings" onClick="setView('settingsView')"><i class="fa fa-wrench fa-lg"></i> <span>Tweak</span></a> 
+        
+        <a href="#void" class="view-switch" onClick="setView('analyze')"><i class="fa fa-bar-chart fa-lg"></i>
+  <span>Analyze</span></a> <!-- a href="javascript:void(0)" class="view-switch" id="settings-button" title="Settings" onClick="showEditForm('settings')"><i class="fa fa-wrench fa-lg"></i> Settings</a -->
+        
+        <a href="#void" class="view-switch" onClick="setView('taskList')"><i class="fa fa-clock-o fa-lg"></i><span>
+  Track</span></a>
+        </div>
+        
+  
+      </div>
+      <div class="clearfix"></div>
       <div id="feedback" class="notice" style="display:none">
                                                 
       </div>
@@ -87,6 +87,7 @@ Analyze</a>
         
       <div class="clearfix"></div>
       
+      <!-- TaskList -->
       <div id="taskList-view" class="view-container">     
 
          
@@ -119,24 +120,29 @@ Analyze</a>
                 </div>  
            </div>  
            <div id="taskList-options">
+             <div style="float: left; min-width: 200px;">  
              Sort by: <a href="#void" onClick="taskList.sort('name')">name</a> | <a href="#void" onClick="taskList.sort('priority')">priority</a> | <a href="#void" onClick="taskList.sort('status')">status</a> | <a href="#void" onClick="taskList.sort('time')">time</a>             
+             </div>
              <!-- select id="sort-by" onChange="taskList.sort(this.value);">
               <option value="name" selected>Sort by: name</option>       
               <option value="priority" >Sort by: priority</option>        
               <option value="status" >Sort by: status</option>            
               <option value="time" >Sort by: time</option>   
-             </select -->                    
-             <input type="checkbox" id="hide-completed" onChange="taskList.hideCompleted()" checked><label for="hide-completed">Hide completed</label>
+             </select -->
+             <div style="float: left; min-width: 200px;">                    
+             <input type="checkbox" id="hide-completed" onChange="taskList.hideCompleted()" checked>&nbsp;<label for="hide-completed">Hide&nbsp;completed</label>
+             </div>
            </div>       
          
          </div>
          
-          
+      <!-- Tweak -->    
       <div id="settingsView-view"  class="view-container" style="display: none">
           <div id="settings-fields-container">
-            <div id="settings-item-template" style="display:none" class="settings-item half-width">
+            <div id="settings-item-template" style="display:none" class="settings-item">
               <div class="settings-label">{{label}}</div>
               <div class="settings-input">{{input}}</div>
+              <div class="clearfix"></div>
             </div>
           </div>
           
@@ -145,15 +151,22 @@ Analyze</a>
           <a href="#void" onClick="editJson()" class="button">Show/Edit JSON</a>  
           <a href="#void" onClick="synchToServer()" class="button">Synch to server</a>   
           <a href="#void" onClick="synchFromServer()" class="button">Synch from server</a>
-          <a href="#void" onClick="deleteLocalStorage()" class="button">Delete LS data</a>  
+          <a href="#void" onClick="deleteLocalStorage()" class="button">Delete LS data</a>
+          
+          <div id="test-output"></div>
+    
+          <div id="json-output"></div>
+            
       </div>
       
+      
+      <!-- Analyze -->
       <div id="analyze-view"  class="view-container" style="display: none">
          <h3 id="analytics-view-title"></h3>
          <div id="analyze-controls">
          
-         <input type="text" id="filter-start-time"  placeholder="Start date" />
-         <input type="text" id="filter-end-time" placeholder="End date" />
+         <input type="text" id="filter-start-time"  placeholder="Start date" onChange="analyze.setStartTime()" />
+         <input type="text" id="filter-end-time" placeholder="End date" onChange="analyze.setEndTime()" />
          </div>
          
          
@@ -161,26 +174,36 @@ Analyze</a>
             <thead>
               <tr>
               <td>Client</td><td>Project</td><td>Task</td><td>Start time</td><td>Duration</td>
+                  <td>Decimal</td>
               </tr>
             </thead>
             <tbody>
-              <tr class="js-data-template" id="analyze-data-row-template" style="display:none" data-template="analyze-data-row">
+              <tr class="js-data-template {{rowType}}-analyze-row" id="analyze-data-row-template" style="display:none" data-template="analyze-data-row">
                   <td>{{client}}</td>
                   <td>{{project}}</td>
                   <td>{{task}}</td>
                   <td>{{start_time}}</td> 
-                  <td>{{durationHMS}}</td>
+                  <td style="text-align:right">{{durationHMS}}</td>   
+                  <td style="text-align:right">{{durationDecimal}}</td>
               </tr>
               <tr id="no-data-found-table" style="display: none;">
               <td colspan="5" style="font-size: 1.5em; color: #aaa; text-align:center">No sessions to display</td></tr>
             </tbody>
             <tfoot class="js-data-template" id="analyze-totals-template" style="display:none">
-              <tr class="table-totals"><td colspan="4">Billable time</td><td>{{totalBillableTimeHMS}}</td></tr> 
-              <tr class="table-totals"><td colspan="4">Total time</td><td>{{totalTimeHMS}}</td></tr>
+              <tr class="table-totals">
+                <td colspan="4">Billable time</td>
+                <td>{{totalBillableTimeHMS}}</td>  
+                <td>{{totalBillableTimeDecimal}}</td>
+              </tr> 
+              <tr class="table-totals">
+                <td colspan="4">Total time</td>
+                <td>{{totalTimeHMS}}</td>
+                <td>{{totalTimeDecimal}}</td>
+              </tr>  
             </tfoot>
          </table>
       
-      </div -->      
+      </div>      
                                                               
          
      <div id="task-tree">
@@ -189,8 +212,7 @@ Analyze</a>
             
       
       
-      <div id="test-output"> 
-      </div>
+
       
       
       
@@ -200,8 +222,6 @@ Analyze</a>
     <div id="active-session">
     </div>
     
-    
-    <div id="json-output"></div>
     
     <div id="edit-popup" style="display: none;" class="modal-popup centered-box">
     
@@ -242,7 +262,6 @@ Analyze</a>
     
     // target element
     var ratingElements = document.getElementsByClassName('c-rating');
-
     for (var eleId in ratingElements){ 
       // current rating, or initial rating
       var currentRating = 0;
@@ -262,4 +281,4 @@ Analyze</a>
     
     </script>
   </body>
-</html>                                                        
+</html> 
