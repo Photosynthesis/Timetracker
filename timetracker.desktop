@@ -1,7 +1,7 @@
 [Desktop Entry]
 Comment[en_US]=PSC Timetracker app
 Comment=PSC Timetracker app
-Exec=webapp-container --store-session-cookies --webappUrlPatterns=https?://photosynth.ca/* http://photosynth.ca/timetracker/timetracker.html %u
+Exec=webapp-container --store-session-cookies --webappUrlPatterns=https?://photosynth.ca/* http://photosynth.ca/timetracker %u
 GenericName[en_US]= TimeTracker
 GenericName= TimeTracker
 Icon=/home/.local/share/applications/timetracker-icon.png
