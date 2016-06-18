@@ -129,7 +129,15 @@ input[type=text], select, textarea{
 #edit-popup input,#edit-popup select,#edit-popup textarea{
   width: 60%;
 }      
-      
+
+.edit-field{
+  padding-bottom: 1em;
+}      
+
+.edit-field input, .edit-field select, .edit-field textarea{
+  margin-left: 15px;
+}
+
 
   
 #edit-popup{
@@ -201,6 +209,16 @@ input.button-end-field:active{
   background-color: #ffffff;
   z-index: 1000;
   display: none;
+}
+
+#active-session .button, #active-session div,  #active-session input{
+  margin-left: 0;
+  margin-bottom: 15px;
+  margin-top: 0;
+  margin-right: 10px;
+}
+#active-session input[type=text]{
+  width: 100%;
 }
 
 .centered-box{
@@ -509,4 +527,6 @@ color: #000;
   }
   
 }
+
+
 

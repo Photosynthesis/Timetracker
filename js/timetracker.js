@@ -228,7 +228,9 @@ function ttInit(){
      
    });
    
-
+   $('.modal-bg').on('click',function(e){
+      cancelEditForm();
+   });
    
 }
 
@@ -1306,10 +1308,11 @@ function showGeneralEditForm(type,id){
     }
     
     if(field.type == "text"){
-         $("#edit-popup").append('<div>'+field.label+' <input type="text" value="'+val+'" id="'+type+'-'+key+'-edit-input"/></div>');
+         $("#edit-popup").append('<div class="edit-field">'+field.label+' <input type="text" value="'+val+'" id="'+type+'-'+key+'-edit-input"/></div>');
     }else if(field.type == "select"){
     
          var fieldDiv = document.createElement('div'); 
+         fieldDiv.className = "edit-field";
          
          fieldDiv.innerHTML = field.label
          
@@ -1339,7 +1342,7 @@ function showGeneralEditForm(type,id){
          $("#edit-popup").append(fieldDiv);
           
     }else if(field.type == "textarea"){
-         $("#edit-popup").append('<div>'+field.label+' <textarea id="'+type+'-'+key+'-edit-input">'+val+'</textarea></div>');
+         $("#edit-popup").append('<div class="edit-field">'+field.label+' <textarea id="'+type+'-'+key+'-edit-input">'+val+'</textarea></div>');
     }   
  
   }
@@ -2346,6 +2349,12 @@ analyze.filter = function (){
    var clientTotal = 0; 
    var lastClientId = 0;
    
+   var stats = {
+      sessions: 0,
+      avgSessionLength: 0,
+      avgSessionsPerTask: 0
+   };
+   
    for (row in flatData){          
    
      if (fs.clientId != "all" && flatData[row].client_id != fs.clientId){ continue; } 
@@ -2353,6 +2362,8 @@ analyze.filter = function (){
      //if (fs.taskId != "all"  && flatData[row].task_id != fs.taskId){ continue; }     
      if (fs.startTime != "all" && flatData[row].start_time < fs.startTime){ continue; }      
      if (fs.endTime && flatData[row].end_time > fs.endTime){ continue; }
+     
+     stats.sessions += 1;
      
      if(!current_client){ 
        if(lastRow.client_id && flatData[row].client_id != lastRow.client_id){ 
@@ -2447,6 +2458,8 @@ analyze.filter = function (){
    analyze.totals.totalBillableTimeDecimal = hoursFromSeconds(totalBillableTime,2);           
    analyze.tableData = tempTableData;
    
+   stats.avgSessionLength = timeFromSeconds(totalTime/stats.sessions);
+   
    clearTemplate("analyze-data-row-template");
    
    for(var i = 0; i < analyze.tableData.length; i++){          
@@ -2454,7 +2467,10 @@ analyze.filter = function (){
    }
    
    clearTemplate("analyze-totals-template");
-   template(analyze.totals,"analyze-totals-template");
+   template(analyze.totals,"analyze-totals-template");  
+           
+   clearTemplate("analyze-stats-template");
+   template(stats,"analyze-stats-template");
    
    if(!tempTableData[0]){
      document.getElementById("no-data-found-table").style.display = "table-row";

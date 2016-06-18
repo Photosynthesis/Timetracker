@@ -170,7 +170,7 @@
          </div>
          
          
-         <table class="datatable" id="datatable">
+         <table class="datatable" id="analyze-table">
             <thead>
               <tr>
               <td>Client</td><td>Project</td><td>Task</td><td>Start time</td><td>Duration</td>
@@ -187,7 +187,7 @@
                   <td style="text-align:right">{{durationDecimal}}</td>
               </tr>
               <tr id="no-data-found-table" style="display: none;">
-              <td colspan="5" style="font-size: 1.5em; color: #aaa; text-align:center">No sessions to display</td></tr>
+              <td colspan="6" style="font-size: 1.5em; color: #aaa; text-align:center">No sessions to display</td></tr>
             </tbody>
             <tfoot class="js-data-template" id="analyze-totals-template" style="display:none">
               <tr class="table-totals">
@@ -202,6 +202,10 @@
               </tr>  
             </tfoot>
          </table>
+         <div id="analyze-stats-template" style="display:none; font-size: 0.9em; margin-top:10px">
+         Sessions: <b>{{sessions}}</b>  length (avg): <b>{{avgSessionLength}}</b>
+         </div>
+         
       
       </div>      
                                                               
@@ -224,9 +228,14 @@
     
     
     <div id="edit-popup" style="display: none;" class="modal-popup centered-box">
+        <div id="edit-field-template" style="display:none" class="edit-field">
+          <div class="edit-field-label">{{label}}</div>
+          <div class="edit-field-input">{{input}}</div>
+          <div class="clearfix"></div>
+        </div>
     
     </div>
-    <div class="modal-bg" id="modal-bg" style="display:none;">
+    <div class="modal-bg" id="modal-bg" style="display:none;" onClick="cancelEditForm()">
     
     </div>
     </div>
