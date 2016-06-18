@@ -1,5 +1,4 @@
 var current_client, current_project, current_task, current_session;
-
 var ttData;
 
 var  client_select = document.getElementById('client-select'); 
@@ -2627,7 +2626,3 @@ function emitEvent(type,action,value){
   }
 }
 
-
-
- 
-                   
