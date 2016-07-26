@@ -1,61 +1,61 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
 <html>
   <head>
-    <meta http-equiv="Content-Type" content="text/html; charset=windows-1250">   
+    <meta http-equiv="Content-Type" content="text/html; charset=windows-1250">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    
-    <link rel="stylesheet" href="css/timetracker.css" type="text/css"> 
-    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css"> 
-    <link rel="stylesheet" href="css/pikaday.css">                                                           
-    <link rel="stylesheet" href="css/jqtree.css">                                                            
+
+    <link rel="stylesheet" href="css/timetracker.css" type="text/css">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
+    <link rel="stylesheet" href="css/pikaday.css">
+    <link rel="stylesheet" href="css/jqtree.css">
     <link rel="stylesheet" href="css/rating.min.css">
 
     <script type="text/javascript" src="js/jquery-1.6.4.min.js"></script>
-    <script type="text/javascript" src="js/moment.min.js"></script>   
-    <script type="text/javascript" src="js/pikaday.js"></script>    
-    <script type="text/javascript" src="js/tree.jquery.js"></script> 
-    <script type="text/javascript" src="js/timetracker.js"></script> 
-        
+    <script type="text/javascript" src="js/moment.min.js"></script>
+    <script type="text/javascript" src="js/pikaday.js"></script>
+    <script type="text/javascript" src="js/tree.jquery.js"></script>
+    <script type="text/javascript" src="js/timetracker.js"></script>
+
     <title>Timetracker</title>
   </head>
   <body onLoad="ttInit();">
-    
+
     <div id="container">
       <div id="header">
-        <h1 style="float: left;">timetracker</h1> 
-        <div id="view-links">    
-        <a href="javascript:void(0)" class="view-switch" id="settings-button" title="Settings" onClick="setView('settingsView')"><i class="fa fa-wrench fa-lg"></i> <span>Tweak</span></a> 
-        
+        <h1 style="float: left;">timetracker</h1>
+        <div id="view-links">
+        <a href="javascript:void(0)" class="view-switch" id="settings-button" title="Settings" onClick="setView('settingsView')"><i class="fa fa-wrench fa-lg"></i> <span>Tweak</span></a>
+
         <a href="#void" class="view-switch" onClick="setView('analyze')"><i class="fa fa-bar-chart fa-lg"></i>
   <span>Analyze</span></a> <!-- a href="javascript:void(0)" class="view-switch" id="settings-button" title="Settings" onClick="showEditForm('settings')"><i class="fa fa-wrench fa-lg"></i> Settings</a -->
-        
+
         <a href="#void" class="view-switch" onClick="setView('taskList')"><i class="fa fa-clock-o fa-lg"></i><span>
   Track</span></a>
         </div>
-        
-  
+
+
       </div>
       <div class="clearfix"></div>
       <div id="feedback" class="notice" style="display:none">
-                                                
+
       </div>
         <div id="client-project-controls">
           <!-- Client controls -->
           <div class="control-container rounded" id="client-controls">
-            <div class="control-title-container"><div class="control-title">Client/Category</div></div> 
-      
-            <form method="post" id="client-form" action="" ondblclick="addClientForm()">     
+            <div class="control-title-container"><div class="control-title">Client/Category</div></div>
+
+            <form method="post" id="client-form" action="" ondblclick="addClientForm()">
               <div id="add-client-form" style="display:none;">
                     <input type="text" id="add-client-input" placeholder="New client name"/>
                     <a href="#void" class="button" title="Save" onClick="saveClient()"><i class="fa fa-floppy-o" aria-hidden="true"></i></a>
                     <a href="#void" class="button" title="Cancel" onClick="cancelAddClient()"><i class="fa fa-times" aria-hidden="true"></i>
   </a>
-              </div> 
-                   
+              </div>
+
               <div id="select-client-form" style="display:block;">
               <select name="client_id" id="client-select" onchange="setClient()">
                     <option value="all">- All Clients -</option>
-                    
+
               </select>
               <a href="#void" class="button edit" title="Edit" onClick="showEditForm('client')"><i class="fa fa-pencil" aria-hidden="true"></i>
   </a><a href="#void" class="button" onClick="addClientForm()"><i class="fa fa-plus" aria-hidden="true"></i>
@@ -63,80 +63,80 @@
               </div>
             </form>
           </div>
-          
+
           <!-- Project controls -->
           <div class="control-container rounded" id="project-controls" style="display:none;">
-            <div class="control-title-container"><div class="control-title">Project</div></div> 
+            <div class="control-title-container"><div class="control-title">Project</div></div>
             <form method="post" id="project-form" action="">
-            
+
               <div id="add-project-form" style="display:none;">
                   <input type="text" id="add-project-input" placeholder="New project name"/>
                   <a href="#void" class="button" onClick="saveProject()"><i class="fa fa-floppy-o" aria-hidden="true"></i></a>
                   <a href="#void" class="button" onClick="cancelAddProject()"><i class="fa fa-times" aria-hidden="true"></i></a>
-              </div> 
-                 
-              <div id="select-project-form" style="display:block;">     
+              </div>
+
+              <div id="select-project-form" style="display:block;">
                 <select name="project_id" id="project-select" onchange="setProject()">
                       <option value="all" style="color: #aaaaaa"> - All Projects - </option>
                 </select>
                 <a href="#void" class="button edit" id="edit-project-button" onClick="showEditForm('project')" style="display:none;"><i class="fa fa-pencil" aria-hidden="true"></i></a><a href="#void" class="button" onClick="addProjectForm()"><i class="fa fa-plus" aria-hidden="true"></i></a>
               </div>
-            </form>                                
+            </form>
           </div>
         </div>
-        
-      <div class="clearfix"></div>
-      
-      <!-- TaskList -->
-      <div id="taskList-view" class="view-container">     
 
-         
+      <div class="clearfix"></div>
+
+      <!-- TaskList -->
+      <div id="taskList-view" class="view-container">
+
+
            <div id="task-list" style="display:none">
                 <div id="tasklist-new-task-form">
-                  
+
                   <form method="post" id="task-form" action="">
                     <div class="glommed-field-div">
-                      <input type="text" class="button-end-field" id="new-task-input" name="new-task-input" placeholder="Add new task" /><a href="#void" onClick="saveNewTask()" class="button field-end-button" id="save-new-task-button">Save</a>                         
-                    </div>        
+                      <input type="text" class="button-end-field" id="new-task-input" name="new-task-input" placeholder="Add new task" /><a href="#void" onClick="saveNewTask()" class="button field-end-button" id="save-new-task-button">Save</a>
+                    </div>
                   </form>
-                  
+
                 </div>
-                
+
                 <div class="task-list-item" id="task-list-item-template">
                     <div class="task {{task.status}}" style="display:flex;" onDblClick="showGeneralEditForm('task','{{task.id}}')">
                       <div style="width: 80%; flex: 1">
-                     
-                      {{checkCompleted}} {{task.name}} <span class="task-meta">{{task.displayStatus}} {{metaSeparator}} {{task.prettyTime}}</span> <span class="fa-stack" style="font-size: 0.6em;" class="billability" ><i class="fa fa-circle fa-2x fa-stack-2x"></i><i class="fa fa-usd fa-lg fa-stack-1x fa-inverse"></i></span> </span> 
+
+                      {{checkCompleted}} {{task.name}} <span class="task-meta">{{task.displayStatus}} {{metaSeparator}} {{task.prettyTime}}</span> <span class="fa-stack" style="font-size: 0.6em;" class="billability" ><i class="fa fa-circle fa-2x fa-stack-2x"></i><i class="fa fa-usd fa-lg fa-stack-1x fa-inverse"></i></span> </span>
                       </div>
                       <div style="width: 20px; flex:0.05; font-size: 1.2em; margin-top: 2px;">
                         <i onClick="startGeneralSession('{{task.id}}')" style="cursor:pointer; color:#77aa88;" class="fa fa-play-circle fa-lg"></i>
                       </div>
                     </div>
-                     
-                </div>                                
+
+                </div>
                 <div><ul class="c-rating"></ul></div>
-                <div id="no-data-found" style="display: none;">                                                                          
+                <div id="no-data-found" style="display: none;">
                   <div colspan="5" style="font-size: 1.5em; color: #aaa; text-align:center">No data to display</div>
-                </div>  
-           </div>  
+                </div>
+           </div>
            <div id="taskList-options">
-             <div style="float: left; min-width: 200px;">  
-             Sort by: <a href="#void" onClick="taskList.sort('name')">name</a> | <a href="#void" onClick="taskList.sort('priority')">priority</a> | <a href="#void" onClick="taskList.sort('status')">status</a> | <a href="#void" onClick="taskList.sort('time')">time</a>             
+             <div style="float: left; min-width: 200px;">
+             Sort by: <a href="#void" onClick="taskList.sort('name')">name</a> | <a href="#void" onClick="taskList.sort('priority')">priority</a> | <a href="#void" onClick="taskList.sort('status')">status</a> | <a href="#void" onClick="taskList.sort('time')">time</a>
              </div>
              <!-- select id="sort-by" onChange="taskList.sort(this.value);">
-              <option value="name" selected>Sort by: name</option>       
-              <option value="priority" >Sort by: priority</option>        
-              <option value="status" >Sort by: status</option>            
-              <option value="time" >Sort by: time</option>   
+              <option value="name" selected>Sort by: name</option>
+              <option value="priority" >Sort by: priority</option>
+              <option value="status" >Sort by: status</option>
+              <option value="time" >Sort by: time</option>
              </select -->
-             <div style="float: left; min-width: 200px;">                    
+             <div style="float: left; min-width: 200px;">
              <input type="checkbox" id="hide-completed" onChange="taskList.hideCompleted()" checked>&nbsp;<label for="hide-completed">Hide&nbsp;completed</label>
              </div>
-           </div>       
-         
+           </div>
+
          </div>
-         
-      <!-- Tweak -->    
+
+      <!-- Tweak -->
       <div id="settingsView-view"  class="view-container" style="display: none">
           <div id="settings-fields-container">
             <div id="settings-item-template" style="display:none" class="settings-item">
@@ -145,31 +145,31 @@
               <div class="clearfix"></div>
             </div>
           </div>
-          
+
           <a href="#void" onClick="settingsView.save()" class="button">Save Settings</a>
           <br>
-          <a href="#void" onClick="editJson()" class="button">Show/Edit JSON</a>  
-          <a href="#void" onClick="synchToServer()" class="button">Synch to server</a>   
+          <a href="#void" onClick="editJson()" class="button">Show/Edit JSON</a>
+          <a href="#void" onClick="synchToServer()" class="button">Synch to server</a>
           <a href="#void" onClick="synchFromServer()" class="button">Synch from server</a>
           <a href="#void" onClick="deleteLocalStorage()" class="button">Delete LS data</a>
-          
+
           <div id="test-output"></div>
-    
+
           <div id="json-output"></div>
-            
+
       </div>
-      
-      
+
+
       <!-- Analyze -->
       <div id="analyze-view"  class="view-container" style="display: none">
          <h3 id="analytics-view-title"></h3>
          <div id="analyze-controls">
-         
+
          <input type="text" id="filter-start-time"  placeholder="Start date" onChange="analyze.setStartTime()" />
          <input type="text" id="filter-end-time" placeholder="End date" onChange="analyze.setEndTime()" />
          </div>
-         
-         
+
+
          <table class="datatable" id="analyze-table">
             <thead>
               <tr>
@@ -182,8 +182,8 @@
                   <td>{{client}}</td>
                   <td>{{project}}</td>
                   <td>{{task}}</td>
-                  <td>{{start_time}}</td> 
-                  <td style="text-align:right">{{durationHMS}}</td>   
+                  <td>{{start_time}}</td>
+                  <td style="text-align:right">{{durationHMS}}</td>
                   <td style="text-align:right">{{durationDecimal}}</td>
               </tr>
               <tr id="no-data-found-table" style="display: none;">
@@ -192,102 +192,101 @@
             <tfoot class="js-data-template" id="analyze-totals-template" style="display:none">
               <tr class="table-totals">
                 <td colspan="4">Billable time</td>
-                <td>{{totalBillableTimeHMS}}</td>  
+                <td>{{totalBillableTimeHMS}}</td>
                 <td>{{totalBillableTimeDecimal}}</td>
-              </tr> 
+              </tr>
               <tr class="table-totals">
                 <td colspan="4">Total time</td>
                 <td>{{totalTimeHMS}}</td>
                 <td>{{totalTimeDecimal}}</td>
-              </tr>  
+              </tr>
             </tfoot>
          </table>
          <div id="analyze-stats-template" style="display:none; font-size: 0.9em; margin-top:10px">
          Sessions: <b>{{sessions}}</b>  length (avg): <b>{{avgSessionLength}}</b>
          </div>
-         
-      
-      </div>      
-                                                              
-         
-     <div id="task-tree">
-     
-     </div>
-            
-      
-      
 
-      
-      
-      
-      
-      
-      
+
+      </div>
+
+
+     <div id="task-tree">
+
+     </div>
+
+
+
+
+
+
+
+
+
+
     <div id="active-session">
     </div>
-    
-    
+
+
     <div id="edit-popup" style="display: none;" class="modal-popup centered-box">
         <div id="edit-field-template" style="display:none" class="edit-field">
           <div class="edit-field-label">{{label}}</div>
           <div class="edit-field-input">{{input}}</div>
           <div class="clearfix"></div>
         </div>
-    
     </div>
     <div class="modal-bg" id="modal-bg" style="display:none;" onClick="cancelEditForm()">
-    
+
     </div>
     </div>
-    
-    
-    <script type="text/javascript" src="js/rating.js"></script>  
+
+
+    <script type="text/javascript" src="js/rating.js"></script>
     <script type="text/javascript">
-  /*     
+  /*
     var callback = function(rating) { alert(rating); };
-    
+
     var ratingElements = document.getElementsByClassName('c-rating');
-                                                                      
+
     var taskElements = document.getElementsByClassName('task');
-    
+
     for (var eleId in taskElements){
       var ratingEle = document.createElement('ul');
       ratingEle.classList.add('c-rating');
- 
- 
-      
+
+
+
       taskElements[eleId].appendChild(ratingEle)
-      
- 
-      r = rating(ratingEle,2,5,callback); 
-    }       
-    
-    for (var eleId in ratingElements){ 
-      r = rating(ratingElements[eleId],2,5,callback); 
-    }   
-    
-    
-   Star ratings 
-    
+
+
+      r = rating(ratingEle,2,5,callback);
+    }
+
+    for (var eleId in ratingElements){
+      r = rating(ratingElements[eleId],2,5,callback);
+    }
+
+
+   Star ratings
+
     // target element
     var ratingElements = document.getElementsByClassName('c-rating');
-    for (var eleId in ratingElements){ 
+    for (var eleId in ratingElements){
       // current rating, or initial rating
       var currentRating = 0;
-      
+
       // max rating, i.e. number of stars you want
       var maxRating= 5;
-      
+
       // callback to run after setting the rating
       var callback = function(rating) { alert(rating); };
-      
+
       // rating instance
       r = rating(ratingElements[eleId], currentRating, maxRating, callback);
-      
-    
+
+
     }
     */
-    
+
     </script>
   </body>
-</html> 
+</html>
