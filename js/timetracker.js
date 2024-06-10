@@ -2435,7 +2435,7 @@ function synchToServer(){
 
 
      $.ajax({
-         url: 'http://photosynth.ca/timetracker/synch.php?action=synchToServer&key='+ttData.userKey,
+         url: 'https://photosynth.ca/timetracker/synch.php?action=synchToServer&key='+ttData.userKey,
          type: 'POST',
          contentType:'application/json',
          data: JSON.stringify(ttData),
@@ -2469,7 +2469,7 @@ function synchFromServer(){
   if(typeof http != "object"){
 
      $.ajax({
-         url: 'http://photosynth.ca/timetracker/synch.php?action=synchFromServer&key='+ttData.userKey,
+         url: 'https://photosynth.ca/timetracker/synch.php?action=synchFromServer&key='+ttData.userKey,
          type: 'POST',
          contentType:'application/json',
          data:{"action":"synchFromServer"},
