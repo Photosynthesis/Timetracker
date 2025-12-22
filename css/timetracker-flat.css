@@ -375,6 +375,38 @@ color: #000;
   color: #5a9;
 }
 
+/* Task star icon */
+.task-star {
+  cursor: pointer;
+  color: #ccc;
+  margin-right: 5px;
+  transition: color 0.2s ease;
+}
+
+.task-star:hover {
+  color: #e8c547;
+}
+
+.task-star.starred {
+  color: #e8c547;
+}
+
+/* Filter star icon */
+#filter-starred {
+  cursor: pointer;
+  color: #ccc;
+  font-size: 1.2em;
+  transition: color 0.2s ease;
+}
+
+#filter-starred:hover {
+  color: #e8c547;
+}
+
+#filter-starred.filter-active {
+  color: #e8c547;
+}
+
 
 /* Control Box Styles */
 #client-project-controls, .view-container, #header, #feedback{

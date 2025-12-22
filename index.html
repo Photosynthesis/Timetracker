@@ -109,7 +109,7 @@
                 <div class="task-list-item" id="task-list-item-template">
                     <div class="task {{task.status}}" style="display:flex;" data-task-id="{{task.id}}" onDblClick="showGeneralEditForm('task','{{task.id}}')">
                       <div style="width: 80%; flex: 1">
-                      {{checkCompleted}} {{task.truncateName}}
+                      {{checkCompleted}} {{task.truncateName}} {{starIcon}}
                       <span class="task-meta">{{task.metaParentage}}{{task.metaEstimate}}{{task.metaPrettyTime}} <span class="fa-stack billability" style="font-size: 0.6em; display:{{billable_display}}; padding-left:5px;"><i class="fa fa-circle fa-2x fa-stack-2x"></i><i class="fa fa-usd fa-lg fa-stack-1x fa-inverse"></i></span> </span>
                       </div>
                       <div style="width: 20px; flex:0.05; font-size: 1.2em; margin-top: 2px;">
@@ -124,6 +124,9 @@
                 </div>
            </div>
            <div id="taskList-options">
+             <div style="float: left; min-width: 50px;">
+               <i class="fa fa-star" id="filter-starred" onClick="taskList.toggleStarFilter()" title="Show only starred tasks"></i>
+             </div>
              <div style="float: left; min-width: 200px;">
              Sort by: <a href="#void" onClick="taskList.sort('name')">name</a> | <a href="#void" onClick="taskList.sort('priority')">priority</a> | <a href="#void" onClick="taskList.sort('status')">status</a> | <a href="#void" onClick="taskList.sort('time')">time</a>  | <a href="#void" onClick="taskList.sort('sessionCount')">sessions</a>  | <a href="#void" onClick="taskList.sort('lastSessionTime')">last session</a>
              </div>

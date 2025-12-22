@@ -599,6 +599,21 @@ function setTaskComplete(task_id,element){
 
 }
 
+/* Toggle task starred status */
+function toggleTaskStar(task_id){
+  var task = getItemById("task", task_id);
+
+  if(task.starred == "1"){
+    task.starred = "0";
+  }else{
+    task.starred = "1";
+  }
+
+  updateItemById("task", task_id, task);
+  emitEvent("task", "updated");
+  ttSave();
+}
+
 
 /* ######################### TRACK SESSION CONTROL ########################## */
 
@@ -1601,9 +1616,16 @@ taskList.refresh = function(){
   for (taskListKey in taskList.tasks){
      var task = taskList.tasks[taskListKey];
 
+     // Apply filters
+     var showTask = true;
+     if(taskList.hideCompletedTasks && task.status == "completed"){
+       showTask = false;
+     }
+     if(taskList.showOnlyStarred && task.starred != "1"){
+       showTask = false;
+     }
 
-
-     if(taskList.hideCompletedTasks == false || task.status != "completed"){
+     if(showTask){
 
        var templateData = [];
 
@@ -1626,7 +1648,11 @@ taskList.refresh = function(){
 
        var completedInput = "<input type=\"checkbox\" name=\"task-completed\" "+completedFlag+" onClick=\"setTaskComplete('"+task.id+"')\"/>";
 
+       var starClass = (task.starred == "1") ? "starred" : "";
+       var starIcon = "<i class='fa fa-star task-star " + starClass + "' onClick=\"toggleTaskStar('" + task.id + "')\"></i>";
+
        templateData.push({placeholder:"{{checkCompleted}}",value: completedInput});
+       templateData.push({placeholder:"{{starIcon}}",value: starIcon});
        templateData.push({placeholder:"{{billable_display}}",value: billable_display});
 
 
@@ -1653,6 +1679,19 @@ taskList.refresh = function(){
 
 taskList.hideCompleted = function(){
    taskList.hideCompletedTasks = gebi("hide-completed").checked ? true : false;
+   taskList.update();
+}
+
+taskList.toggleStarFilter = function(){
+   taskList.showOnlyStarred = !taskList.showOnlyStarred;
+
+   var filterIcon = gebi("filter-starred");
+   if(taskList.showOnlyStarred){
+     filterIcon.classList.add("filter-active");
+   }else{
+     filterIcon.classList.remove("filter-active");
+   }
+
    taskList.update();
 }
 
