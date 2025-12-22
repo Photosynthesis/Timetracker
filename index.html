@@ -110,7 +110,7 @@
                     <div class="task {{task.status}}" style="display:flex;" data-task-id="{{task.id}}" onDblClick="showGeneralEditForm('task','{{task.id}}')">
                       <div style="width: 80%; flex: 1">
                       {{checkCompleted}} {{task.truncateName}}
-                      <span class="task-meta">{{task.metaParentage}}{{task.metaPrettyTime}} <span class="fa-stack billability" style="font-size: 0.6em; display:{{billable_display}}; padding-left:5px;"><i class="fa fa-circle fa-2x fa-stack-2x"></i><i class="fa fa-usd fa-lg fa-stack-1x fa-inverse"></i></span> </span>
+                      <span class="task-meta">{{task.metaParentage}}{{task.metaEstimate}}{{task.metaPrettyTime}} <span class="fa-stack billability" style="font-size: 0.6em; display:{{billable_display}}; padding-left:5px;"><i class="fa fa-circle fa-2x fa-stack-2x"></i><i class="fa fa-usd fa-lg fa-stack-1x fa-inverse"></i></span> </span>
                       </div>
                       <div style="width: 20px; flex:0.05; font-size: 1.2em; margin-top: 2px;">
                         <i onClick="startGeneralSession('{{task.id}}')" style="cursor:pointer; color:#77aa88;" class="fa fa-play-circle fa-lg"></i>

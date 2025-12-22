@@ -371,6 +371,10 @@ color: #000;
   content: "";
 }
 
+.task-meta .task-estimate{
+  color: #5a9;
+}
+
 
 /* Control Box Styles */
 #client-project-controls, .view-container, #header, #feedback{

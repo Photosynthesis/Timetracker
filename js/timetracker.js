@@ -141,6 +141,10 @@ var editFields = {
     notes : {
       label : "Notes",
       type : "textarea",
+    },
+    estimate : {
+      label : "Estimate (minutes)",
+      type : "text"
     }
   },
   session : {
@@ -528,11 +532,16 @@ function saveNewTask(projectId,task_name){
     document.getElementById('new-task-input').value = '';
   }
 
+  // Parse estimate from task name (e.g., "Fix bug (30 m)" or "Build feature (2 h)")
+  var parsed = parseEstimateFromInput(task_name);
+  task_name = parsed.name;
+
   var new_task = {
     'id' : newId(task_name,'task'),
     'name' : task_name,
     'status' : 'new',
-    'sessions' : {}
+    'sessions' : {},
+    'estimate' : parsed.estimate
   };
 
   if(gebi("billable-input")){
@@ -845,8 +854,10 @@ function saveGeneralEditForm(type,id){
     }
   }
 
-
-
+  // Convert estimate from minutes to seconds for storage
+  if(type == "task" && item.estimate){
+    item.estimate = parseFloat(item.estimate) * 60;
+  }
 
   /* This is excessively lame, and is only here because of issues with Vue.js... */
   if(type == "task"){
@@ -947,6 +958,11 @@ function showGeneralEditForm(type,id){
       var val = field.defaultVal;
     }else{
       var val = "";
+    }
+
+    // Convert estimate from seconds to minutes for display
+    if(type == "task" && key == "estimate" && val){
+      val = Math.round(val / 60);
     }
 
     if(field.type == "text"){
@@ -1482,6 +1498,12 @@ taskList.filter = function(){
           this.task.metaPrettyTime = "<span>"+prettyTime(this.task.time)+"</span>";
         }else{
           this.task.metaPrettyTime = '';
+        }
+
+        if(this.task.estimate > 0){
+          this.task.metaEstimate = "<span class='task-estimate'>"+prettyTime(this.task.estimate)+"</span>";
+        }else{
+          this.task.metaEstimate = '';
         }
 
         this.task.metaDisplayStatus = "<span>"+editFields.task.status.options[this.task.status]+"</span>";
@@ -3069,6 +3091,38 @@ function timeDiffSecsFromString(dateStr1,dateStr2){
 
 /* ####################### UTILITY FUNCTIONS ########################## */
 
+/* Parse time estimate from task input string
+ * Supports patterns like: (30 m), (2 h), (1.5h), (45 min), (2 hrs)
+ * Returns object with cleaned name and estimate in seconds
+ */
+function parseEstimateFromInput(input) {
+  var pattern = /\((\d+\.?\d*)\s*(m|min|mins|h|hr|hrs|hour|hours)\)/i;
+  var match = input.match(pattern);
+
+  if (match) {
+    var value = parseFloat(match[1]);
+    var unit = match[2].toLowerCase();
+    var seconds = 0;
+
+    if (unit === 'm' || unit === 'min' || unit === 'mins') {
+      seconds = value * 60;
+    } else if (unit === 'h' || unit === 'hr' || unit === 'hrs' || unit === 'hour' || unit === 'hours') {
+      seconds = value * 3600;
+    }
+
+    var cleanName = input.replace(pattern, '').trim();
+
+    return {
+      name: cleanName,
+      estimate: seconds
+    };
+  }
+
+  return {
+    name: input,
+    estimate: 0
+  };
+}
 
 function gebi(id){
   return document.getElementById(id);
