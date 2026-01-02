@@ -33,8 +33,53 @@ var flatData = [];
 
 var reminderDelay = 0;
 
+var estimateAlert90Triggered = false;
+var estimateAlert100Triggered = false;
+
 var endPicker = '';
 var startPicker = '';
+
+// Audio notification functions for estimate alerts
+function playEstimateDing() {
+  var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  var oscillator = audioCtx.createOscillator();
+  var gainNode = audioCtx.createGain();
+
+  oscillator.connect(gainNode);
+  gainNode.connect(audioCtx.destination);
+
+  oscillator.frequency.value = 880; // A5 note
+  oscillator.type = 'sine';
+  gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+  gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+
+  oscillator.start(audioCtx.currentTime);
+  oscillator.stop(audioCtx.currentTime + 0.5);
+}
+
+function playEstimateAlarm() {
+  var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  var oscillator = audioCtx.createOscillator();
+  var gainNode = audioCtx.createGain();
+
+  oscillator.connect(gainNode);
+  gainNode.connect(audioCtx.destination);
+
+  oscillator.type = 'square';
+  gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
+
+  // Alternating tones for alarm effect
+  oscillator.frequency.setValueAtTime(440, audioCtx.currentTime);
+  oscillator.frequency.setValueAtTime(880, audioCtx.currentTime + 0.2);
+  oscillator.frequency.setValueAtTime(440, audioCtx.currentTime + 0.4);
+  oscillator.frequency.setValueAtTime(880, audioCtx.currentTime + 0.6);
+  oscillator.frequency.setValueAtTime(440, audioCtx.currentTime + 0.8);
+
+  gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 1.0);
+
+  oscillator.start(audioCtx.currentTime);
+  oscillator.stop(audioCtx.currentTime + 1.0);
+}
 
 var lastTaskSaveTime;
 
@@ -308,6 +353,11 @@ function ttInit(){
 /* ########################### CLIENT CONTROL ######################### */
 
 function saveClient(){
+
+  // Ensure clients object exists (may be missing after sync from empty server data)
+  if(!ttData.clients){
+    ttData.clients = {};
+  }
 
   new_client = {
       'id' : newId(),
@@ -622,6 +672,10 @@ function startSession(){
 
   startDate = moment();
 
+  // Reset estimate alert flags for new session
+  estimateAlert90Triggered = false;
+  estimateAlert100Triggered = false;
+
   current_session = {
     'id' : newId(),
     'start_time' : startDate.format("YYYY-MM-DD HH:mm:ss"),
@@ -719,6 +773,27 @@ function incrementCurrentDuration() {
     currentDuration = timeFromSeconds(currentDurationSeconds);
     document.getElementById('current_duration').innerHTML = currentDuration;
     document.title = currentDuration + ' - Timetracker';
+
+    // Check estimate thresholds if task has an estimate
+    if(current_task && current_task.estimate && current_task.estimate > 0){
+      var existingTime = current_task.time || 0;
+      var totalTimeSpent = existingTime + currentDurationSeconds;
+      var percentUsed = (totalTimeSpent / current_task.estimate) * 100;
+
+      // 90% warning ding
+      if(!estimateAlert90Triggered && percentUsed >= 90 && percentUsed < 100){
+        playEstimateDing();
+        estimateAlert90Triggered = true;
+        desktopNotify('90% of estimated time used for: ' + current_task.name, 'Time Estimate Warning');
+      }
+
+      // 100% alarm
+      if(!estimateAlert100Triggered && percentUsed >= 100){
+        playEstimateAlarm();
+        estimateAlert100Triggered = true;
+        desktopNotify('Estimated time exceeded for: ' + current_task.name, 'Time Estimate Exceeded');
+      }
+    }
 
     if(getSetting('reminder_interval') && (currentDurationSeconds/60) > (parseFloat(getSetting('reminder_interval'))+reminderDelay)){
 
@@ -2494,20 +2569,36 @@ function synchToServer(){
    // Do normal Ajax synch if we're not in node
    if(typeof http != "object"){
 
+     var synchUrl = 'https://photosynth.ca/timetracker/synch.php?action=synchToServer&key='+ttData.userKey;
+     var synchData = JSON.stringify(ttData);
+
+     console.log('[OUTBOUND SYNC] Starting outbound sync to server');
+     console.log('[OUTBOUND SYNC] URL:', synchUrl);
+     console.log('[OUTBOUND SYNC] Data being sent:', ttData);
+     console.log('[OUTBOUND SYNC] Data size (chars):', synchData.length);
 
      $.ajax({
-         url: 'http://photosynth.ca/timetracker/synch.php?action=synchToServer&key='+ttData.userKey,
+         url: synchUrl,
          type: 'POST',
          contentType:'application/json',
-         data: JSON.stringify(ttData),
+         data: synchData,
          //dataType:'json',
          success : function(result){
+            console.log('[OUTBOUND SYNC] Success! Raw server response:', result);
+            console.log('[OUTBOUND SYNC] Response type:', typeof result);
+            console.log('[OUTBOUND SYNC] Response length:', result ? result.length : 0);
             setFeedback('Data successfully sent to server');
             document.getElementById('json-output').innerHTML = result;
             dbg("Success on outbound synch. Starting inbound synch.");
             synchFromServer();
          },
          error: function(xhr, ajaxOptions, thrownError){
+            console.log('[OUTBOUND SYNC] Error occurred!');
+            console.log('[OUTBOUND SYNC] XHR status:', xhr.status);
+            console.log('[OUTBOUND SYNC] XHR statusText:', xhr.statusText);
+            console.log('[OUTBOUND SYNC] XHR responseText:', xhr.responseText);
+            console.log('[OUTBOUND SYNC] ajaxOptions:', ajaxOptions);
+            console.log('[OUTBOUND SYNC] thrownError:', thrownError);
             setFeedback('Error synching to server: '+thrownError);
             synchIconStatus("error");
          },
@@ -2610,7 +2701,9 @@ function nodeRequest(direction,url){
     var postData = JSON.stringify(ttData);
     reqAction = 'synchToServer';
 
-    //dbg(postData,"Node synching to server with:");
+    console.log('[OUTBOUND SYNC - Node] Starting outbound sync to server');
+    console.log('[OUTBOUND SYNC - Node] Data being sent:', ttData);
+    console.log('[OUTBOUND SYNC - Node] Data size (chars):', postData.length);
 
   }else{
     reqAction = 'synchFromServer';
@@ -2628,30 +2721,41 @@ function nodeRequest(direction,url){
     }
   };
 
+  if(direction == 'to'){
+    console.log('[OUTBOUND SYNC - Node] URL:', options.hostname + options.path);
+    console.log('[OUTBOUND SYNC - Node] Request options:', options);
+  }
+
   var request = http.request(options, function(result){
 
-    //console.log('STATUS:'+result.statusCode);
-    //console.log('HEADERS:'+JSON.stringify(result.headers));
+    console.log('[OUTBOUND SYNC - Node] Response status code:', result.statusCode);
+    console.log('[OUTBOUND SYNC - Node] Response headers:', JSON.stringify(result.headers));
 
     result.setEncoding('utf8');
 
     var resultData = '';
 
     result.on('data', function(chunk){
-      //console.log('BODY:'+chunk);
       resultData += chunk;
     });
 
     result.on('end', function(){
-      //console.log('No more data in response.');
-      //console.log(result);
-      //console.log(resultData);
+      if(direction == 'to'){
+        console.log('[OUTBOUND SYNC - Node] Response complete');
+        console.log('[OUTBOUND SYNC - Node] Raw server response:', resultData);
+        console.log('[OUTBOUND SYNC - Node] Response length:', resultData.length);
+      }
 
       if(result.statusCode == 200){
 
          try{
            server_data = JSON.parse(resultData);
+           if(direction == 'to'){
+             console.log('[OUTBOUND SYNC - Node] Parsed response:', server_data);
+           }
          }catch(err){
+           console.log('[OUTBOUND SYNC - Node] JSON parse error:', err);
+           console.log('[OUTBOUND SYNC - Node] Raw data that failed to parse:', resultData);
            setFeedback('Error parsing data from server. Error:'+err,'error');
            throw 'JSON parsing exception';
            synchIconStatus("error");
@@ -2667,11 +2771,14 @@ function nodeRequest(direction,url){
              emitEvent('server','synch');
 
         }else if(direction == 'to'){
+             console.log('[OUTBOUND SYNC - Node] Success! updateCount:', server_data.updateCount, 'insertCount:', server_data.insertCount);
              setFeedback('Server synch complete. '+server_data.updateCount+" records updated, "+server_data.insertCount+" new records added");
              synchFromServer();
         }
 
       }else{
+        console.log('[OUTBOUND SYNC - Node] Error! HTTP status:', result.statusCode);
+        console.log('[OUTBOUND SYNC - Node] Error response body:', resultData);
         setFeedback('Server synch failed! Status:'+result.statusCode,'error',true);
         synchIconStatus("error");
       }
@@ -2682,7 +2789,8 @@ function nodeRequest(direction,url){
   });
 
   request.on('error', function(e){
-    //console.log('problem with request:'+e.message);
+    console.log('[OUTBOUND SYNC - Node] Request error:', e.message);
+    console.log('[OUTBOUND SYNC - Node] Full error object:', e);
     setFeedback('Error synching to server: '+e.message);
     synchIconStatus("error");
   });
