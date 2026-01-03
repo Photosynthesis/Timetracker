@@ -149,6 +149,11 @@ var editFields = {
     id : {
       label : "ID",
       type : "text"
+    },
+    _client : {
+      label : "Client",
+      type : "select",
+      dynamicOptions : "clients"
     }
   },
   task : {
@@ -190,6 +195,11 @@ var editFields = {
     estimate : {
       label : "Estimate (minutes)",
       type : "text"
+    },
+    _project : {
+      label : "Project",
+      type : "select",
+      dynamicOptions : "projects"
     }
   },
   session : {
@@ -838,6 +848,142 @@ function desktopNotify(message,title,icon) {
 }
 
 
+/* ################### MOVE ITEMS BETWEEN PARENTS ################### */
+
+/**
+ * Build dynamic options for parent selector dropdowns
+ * @param {string} optionType - "clients" or "projects"
+ * @returns {object} Options object with id:name pairs
+ */
+function buildDynamicOptions(optionType) {
+  var options = {};
+
+  if(optionType === "clients") {
+    for(var clientId in ttData.clients) {
+      options[clientId] = ttData.clients[clientId].name;
+    }
+  }
+  else if(optionType === "projects") {
+    // All projects across all clients
+    for(var clientId in ttData.clients) {
+      var client = ttData.clients[clientId];
+      if(client.projects) {
+        for(var projectId in client.projects) {
+          // Format: "Client Name > Project Name"
+          options[projectId] = client.name + " > " + client.projects[projectId].name;
+        }
+      }
+    }
+  }
+
+  return options;
+}
+
+/**
+ * Move a project from one client to another
+ * @param {string} projectId - The project to move
+ * @param {string} newClientId - The destination client
+ * @returns {boolean} Success status
+ */
+function moveProjectToClient(projectId, newClientId) {
+  var branch = getBranchById("project", projectId);
+  if(!branch.project) {
+    console.error("Project not found:", projectId);
+    return false;
+  }
+
+  var oldClientId = branch.client.id;
+
+  // Don't move if same client
+  if(oldClientId === newClientId) {
+    return false;
+  }
+
+  // Validate destination client exists
+  if(!ttData.clients[newClientId]) {
+    console.error("Destination client not found:", newClientId);
+    return false;
+  }
+
+  // Get the project data
+  var projectData = branch.project;
+
+  // Remove from old client
+  delete ttData.clients[oldClientId].projects[projectId];
+
+  // Ensure new client has projects object
+  if(!ttData.clients[newClientId].projects) {
+    ttData.clients[newClientId].projects = {};
+  }
+
+  // Add to new client
+  ttData.clients[newClientId].projects[projectId] = projectData;
+
+  // Update current_project if it was the moved project
+  if(current_project && current_project.id === projectId) {
+    current_project = ttData.clients[newClientId].projects[projectId];
+    current_client = ttData.clients[newClientId];
+  }
+
+  console.log("Moved project", projectId, "from client", oldClientId, "to", newClientId);
+  return true;
+}
+
+/**
+ * Move a task from one project to another
+ * @param {string} taskId - The task to move
+ * @param {string} newProjectId - The destination project
+ * @returns {boolean} Success status
+ */
+function moveTaskToProject(taskId, newProjectId) {
+  var taskBranch = getBranchById("task", taskId);
+  if(!taskBranch.task) {
+    console.error("Task not found:", taskId);
+    return false;
+  }
+
+  var oldProjectId = taskBranch.project.id;
+  var oldClientId = taskBranch.client.id;
+
+  // Don't move if same project
+  if(oldProjectId === newProjectId) {
+    return false;
+  }
+
+  // Find the new project's client
+  var newProjectBranch = getBranchById("project", newProjectId);
+  if(!newProjectBranch.project) {
+    console.error("Destination project not found:", newProjectId);
+    return false;
+  }
+  var newClientId = newProjectBranch.client.id;
+
+  // Get the task data
+  var taskData = taskBranch.task;
+
+  // Remove from old project
+  delete ttData.clients[oldClientId].projects[oldProjectId].tasks[taskId];
+
+  // Ensure new project has tasks object
+  if(!ttData.clients[newClientId].projects[newProjectId].tasks) {
+    ttData.clients[newClientId].projects[newProjectId].tasks = {};
+  }
+
+  // Add to new project
+  ttData.clients[newClientId].projects[newProjectId].tasks[taskId] = taskData;
+
+  // Update current references if the moved task was selected
+  if(current_task && current_task.id === taskId) {
+    current_task = ttData.clients[newClientId].projects[newProjectId].tasks[taskId];
+    current_project = ttData.clients[newClientId].projects[newProjectId];
+    current_client = ttData.clients[newClientId];
+  }
+
+  console.log("Moved task", taskId, "from project", oldProjectId, "to", newProjectId);
+  return true;
+}
+
+
 function saveUserKey(){
 
   key_val = $("#add-userkey-input").val();
@@ -936,7 +1082,29 @@ function saveGeneralEditForm(type,id){
     var item = getItemById(type,id)
   }
 
+  // Track parent changes for move operations
+  var newClientId = null;
+  var newProjectId = null;
+
+  if(type === "project") {
+    var clientInput = document.getElementById("project-_client-edit-input");
+    if(clientInput) {
+      newClientId = clientInput.value;
+    }
+  }
+
+  if(type === "task") {
+    var projectInput = document.getElementById("task-_project-edit-input");
+    if(projectInput) {
+      newProjectId = projectInput.value;
+    }
+  }
+
   for (key in editFields[type]){
+    // Skip parent selector fields (handled separately via move functions)
+    if(key === "_client" || key === "_project") {
+      continue;
+    }
     if(document.getElementById(type+"-"+key+"-edit-input")){
       item[key] = document.getElementById(type+"-"+key+"-edit-input").value;
     }else{
@@ -954,6 +1122,25 @@ function saveGeneralEditForm(type,id){
     item.displayStatus = editFields.task.status.options[item.status];
   }
 
+  // Handle parent changes (move operations)
+  var moved = false;
+  var feedbackMsg = 'Item updated';
+
+  if(type === "project" && newClientId) {
+    moved = moveProjectToClient(id, newClientId);
+    if(moved) {
+      feedbackMsg = 'Project moved to new client';
+    }
+  }
+
+  if(type === "task" && newProjectId) {
+    moved = moveTaskToProject(id, newProjectId);
+    if(moved) {
+      feedbackMsg = 'Task moved to new project';
+    }
+  }
+
+  // Update item properties (move functions already placed item in new location)
   updateItemById(type,id,item);
 
   /* Unset task time value if edited session */
@@ -973,7 +1160,7 @@ function saveGeneralEditForm(type,id){
   }
 
   ttSave();
-  setFeedback('Item updated');
+  setFeedback(feedbackMsg);
   cancelEditForm();
 
   if(typeof currentView.update == "function"){
@@ -1066,8 +1253,25 @@ function showGeneralEditForm(type,id){
       var select = document.createElement('select');
       select.id = type+'-'+key+'-edit-input';
 
-      for (var optkey in field.options){
-        var option = new Option(field.options[optkey],optkey);
+      // Handle dynamic options for parent selectors
+      var options;
+      if(field.dynamicOptions) {
+        options = buildDynamicOptions(field.dynamicOptions);
+
+        // Set current value from parent context
+        if(key === "_client" && type === "project") {
+          var branch = getBranchById("project", id);
+          val = branch.client.id;
+        } else if(key === "_project" && type === "task") {
+          var branch = getBranchById("task", id);
+          val = branch.project.id;
+        }
+      } else {
+        options = field.options;
+      }
+
+      for (var optkey in options){
+        var option = new Option(options[optkey],optkey);
         select.options.add(option);
       }
 
