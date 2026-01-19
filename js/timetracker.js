@@ -24,8 +24,10 @@ var defaultSettings = {
 analyze = {};
 taskList = {};
 settingsView = {};
+todayView = {};
 clientControls = {};
 projectControls = {};
+taskAutocomplete = {};
 
 var currentView = taskList;
 
@@ -219,6 +221,473 @@ var editFields = {
   }
 };
 
+/* ###################### TASK AUTOCOMPLETE FUNCTIONS ###################### */
+
+// Helper function to escape HTML
+function escapeHtml(text) {
+  var div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// Initialize autocomplete
+taskAutocomplete.init = function() {
+  var input = gebi('new-task-input');
+  var dropdown = gebi('task-autocomplete');
+
+  if (!input || !dropdown) return;
+
+  taskAutocomplete.input = input;
+  taskAutocomplete.dropdown = dropdown;
+  taskAutocomplete.selectedIndex = -1;
+  taskAutocomplete.items = [];
+  taskAutocomplete.slashPosition = -1;
+  taskAutocomplete.selectedClient = null;
+
+  // Bind input events (using bind for jQuery 1.6.4 compatibility)
+  $(input).bind('input', function(e) {
+    taskAutocomplete.handleInput(e);
+  });
+
+  $(input).bind('keydown', function(e) {
+    taskAutocomplete.handleKeydown(e);
+  });
+
+  $(input).bind('blur', function(e) {
+    // Delay to allow click on dropdown items
+    setTimeout(function() {
+      taskAutocomplete.hide();
+    }, 200);
+  });
+
+  // Click on dropdown items (using delegate for jQuery 1.6.4 compatibility)
+  $(dropdown).delegate('.autocomplete-item', 'click', function() {
+    var index = $(this).data('index');
+    taskAutocomplete.selectItem(index);
+  });
+};
+
+// Handle input changes
+taskAutocomplete.handleInput = function(e) {
+  var value = this.input.value;
+  var cursorPos = this.input.selectionStart;
+
+  // Find the last "/" before cursor that starts a path
+  var lastSlashPos = -1;
+  for (var i = cursorPos - 1; i >= 0; i--) {
+    if (value[i] === '/') {
+      lastSlashPos = i;
+      break;
+    }
+    // Stop searching if we hit whitespace before finding a slash
+    if (value[i] === ' ' && lastSlashPos === -1) {
+      break;
+    }
+  }
+
+  // Check if we're in an autocomplete context
+  if (lastSlashPos === -1) {
+    this.hide();
+    this.selectedClient = null;
+    return;
+  }
+
+  // Get the search text after the last slash
+  var searchStart = lastSlashPos + 1;
+
+  // Check if there's a completed client selection (find previous slash)
+  var prevSlashPos = -1;
+  for (var i = lastSlashPos - 1; i >= 0; i--) {
+    if (value[i] === '/') {
+      prevSlashPos = i;
+      break;
+    }
+    if (value[i] === ' ') {
+      break;
+    }
+  }
+
+  var searchText = value.substring(searchStart, cursorPos);
+  this.slashPosition = lastSlashPos;
+
+  // Determine context and get matches
+  if (prevSlashPos !== -1) {
+    // User has typed /Client/... - extract client name and search projects
+    var clientName = value.substring(prevSlashPos + 1, lastSlashPos);
+    this.selectedClient = this.findClientByName(clientName);
+    if (this.selectedClient) {
+      this.showProjectMatches(searchText, this.selectedClient);
+    } else {
+      this.hide();
+    }
+  } else if (this.selectedClient) {
+    // Client was selected via autocomplete, search projects from that client
+    this.showProjectMatches(searchText, this.selectedClient);
+  } else {
+    // No client context - show both clients and projects
+    this.showAllMatches(searchText);
+  }
+};
+
+// Find client by name (case insensitive)
+taskAutocomplete.findClientByName = function(name) {
+  var nameLower = name.toLowerCase();
+  for (var clientId in ttData.clients) {
+    if (ttData.clients[clientId].name.toLowerCase() === nameLower) {
+      return ttData.clients[clientId];
+    }
+  }
+  return null;
+};
+
+// Find project by name within client (case insensitive)
+taskAutocomplete.findProjectByName = function(name, client) {
+  var nameLower = name.toLowerCase();
+  if (!client || !client.projects) return null;
+
+  for (var projectId in client.projects) {
+    if (client.projects[projectId].name.toLowerCase() === nameLower) {
+      return client.projects[projectId];
+    }
+  }
+  return null;
+};
+
+// Show all matches (clients and projects)
+taskAutocomplete.showAllMatches = function(searchText) {
+  var matches = [];
+  var searchLower = searchText.toLowerCase();
+  var selectedClientId = (current_client && typeof current_client === 'object' && current_client.id) ? current_client.id : null;
+
+  // If a client is selected in dropdown, only show that client's projects
+  if (selectedClientId) {
+    var client = ttData.clients[selectedClientId];
+    if (client && client.projects) {
+      for (var projectId in client.projects) {
+        var project = client.projects[projectId];
+        if (project.name.toLowerCase().indexOf(searchLower) !== -1) {
+          matches.push({
+            type: 'project',
+            id: projectId,
+            name: project.name,
+            clientId: selectedClientId,
+            clientName: client.name
+          });
+        }
+      }
+    }
+  } else {
+    // No client selected - show both clients and projects
+    for (var clientId in ttData.clients) {
+      var client = ttData.clients[clientId];
+
+      // Match client names
+      if (client.name.toLowerCase().indexOf(searchLower) !== -1) {
+        matches.push({
+          type: 'client',
+          id: clientId,
+          name: client.name
+        });
+      }
+
+      // Match project names
+      if (client.projects) {
+        for (var projectId in client.projects) {
+          var project = client.projects[projectId];
+          if (project.name.toLowerCase().indexOf(searchLower) !== -1) {
+            matches.push({
+              type: 'project',
+              id: projectId,
+              name: project.name,
+              clientId: clientId,
+              clientName: client.name
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // Sort: clients first, then projects, alphabetically within each group
+  matches.sort(function(a, b) {
+    if (a.type !== b.type) {
+      return a.type === 'client' ? -1 : 1;
+    }
+    return a.name.localeCompare(b.name);
+  });
+
+  this.renderDropdown(matches);
+};
+
+// Show project matches (within specific client)
+taskAutocomplete.showProjectMatches = function(searchText, client) {
+  var matches = [];
+  var searchLower = searchText.toLowerCase();
+
+  if (client && client.projects) {
+    for (var projectId in client.projects) {
+      var project = client.projects[projectId];
+      if (project.name.toLowerCase().indexOf(searchLower) !== -1) {
+        matches.push({
+          type: 'project',
+          id: projectId,
+          name: project.name,
+          clientId: client.id,
+          clientName: client.name
+        });
+      }
+    }
+  }
+
+  matches.sort(function(a, b) {
+    return a.name.localeCompare(b.name);
+  });
+
+  this.renderDropdown(matches);
+};
+
+// Render dropdown
+taskAutocomplete.renderDropdown = function(matches) {
+  this.items = matches;
+  this.selectedIndex = matches.length > 0 ? 0 : -1;
+
+  if (matches.length === 0) {
+    this.dropdown.innerHTML = '<div class="autocomplete-no-matches">No matches found</div>';
+    this.dropdown.style.display = 'block';
+    return;
+  }
+
+  var html = '';
+  for (var i = 0; i < matches.length; i++) {
+    var item = matches[i];
+    var selectedClass = (i === 0) ? ' selected' : '';
+    var typeClass = item.type + '-item';
+
+    html += '<div class="autocomplete-item ' + typeClass + selectedClass + '" data-index="' + i + '">';
+    html += '<span class="autocomplete-item-name">' + escapeHtml(item.name) + '</span>';
+
+    if (item.type === 'project' && item.clientName) {
+      html += '<span class="autocomplete-item-meta">(' + escapeHtml(item.clientName) + ')</span>';
+    }
+
+    html += '</div>';
+  }
+
+  this.dropdown.innerHTML = html;
+  this.dropdown.style.display = 'block';
+};
+
+// Handle keyboard navigation
+taskAutocomplete.handleKeydown = function(e) {
+  if (this.dropdown.style.display !== 'block' || this.items.length === 0) {
+    return;
+  }
+
+  switch (e.keyCode) {
+    case 40: // Down arrow
+      e.preventDefault();
+      this.selectedIndex = Math.min(this.selectedIndex + 1, this.items.length - 1);
+      this.updateSelection();
+      break;
+
+    case 38: // Up arrow
+      e.preventDefault();
+      this.selectedIndex = Math.max(this.selectedIndex - 1, 0);
+      this.updateSelection();
+      break;
+
+    case 13: // Enter
+      if (this.selectedIndex >= 0) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.selectItem(this.selectedIndex);
+        return false;
+      }
+      break;
+
+    case 27: // Escape
+      this.hide();
+      break;
+
+    case 9: // Tab
+      if (this.selectedIndex >= 0) {
+        e.preventDefault();
+        this.selectItem(this.selectedIndex);
+      }
+      break;
+  }
+};
+
+// Update selection highlight
+taskAutocomplete.updateSelection = function() {
+  var items = this.dropdown.querySelectorAll('.autocomplete-item');
+  for (var i = 0; i < items.length; i++) {
+    if (i === this.selectedIndex) {
+      items[i].classList.add('selected');
+      items[i].scrollIntoView({ block: 'nearest' });
+    } else {
+      items[i].classList.remove('selected');
+    }
+  }
+};
+
+// Select item (insert into input)
+taskAutocomplete.selectItem = function(index) {
+  var item = this.items[index];
+  if (!item) return;
+
+  var value = this.input.value;
+  var cursorPos = this.input.selectionStart;
+
+  // Find the start of the autocomplete region (first slash in current sequence)
+  var regionStart = this.slashPosition;
+  for (var i = this.slashPosition - 1; i >= 0; i--) {
+    if (value[i] === '/') {
+      // Check if there's already a client part
+      if (this.selectedClient) {
+        // Keep the /ClientName/ part, only replace from current slash
+        break;
+      }
+      regionStart = i;
+    } else if (value[i] === ' ') {
+      break;
+    }
+  }
+
+  // Determine what to insert
+  var insertText = '';
+  var newCursorPos;
+
+  if (item.type === 'client') {
+    // Insert client name with trailing slash for project selection
+    insertText = '/' + item.name + '/';
+    this.selectedClient = ttData.clients[item.id];
+    newCursorPos = regionStart + insertText.length;
+  } else {
+    // Project selected
+    if (this.selectedClient) {
+      // Already have client, just insert project name with trailing slash
+      insertText = item.name + '/';
+      // Replace from after the client slash
+      regionStart = this.slashPosition + 1;
+    } else if (current_client && typeof current_client === 'object' && current_client.id) {
+      // Client dropdown is set, just use project name
+      insertText = '/' + item.name + '/';
+    } else {
+      // No client context, insert full path
+      insertText = '/' + item.clientName + '/' + item.name + '/';
+    }
+    newCursorPos = regionStart + insertText.length;
+    this.selectedClient = null;
+  }
+
+  // Construct new value
+  var before = value.substring(0, regionStart);
+  var after = value.substring(cursorPos);
+
+  this.input.value = before + insertText + after;
+  this.input.selectionStart = this.input.selectionEnd = newCursorPos;
+
+  this.hide();
+  this.input.focus();
+
+  // If we just selected a client, trigger input to show projects
+  if (item.type === 'client') {
+    $(this.input).trigger('input');
+  }
+};
+
+// Hide dropdown
+taskAutocomplete.hide = function() {
+  this.dropdown.style.display = 'none';
+  this.items = [];
+  this.selectedIndex = -1;
+};
+
+/**
+ * Parse client and project from task input
+ * Supports formats:
+ *   /ClientName/ProjectName/task name
+ *   task name /ClientName/ProjectName/
+ *   /ProjectName/task name (when client is selected)
+ *   task name /ProjectName/ (when client is selected)
+ *
+ * Returns: { name: cleanedTaskName, client: clientObj, project: projectObj }
+ */
+function parseClientProjectFromInput(input) {
+  // First try to match /ClientName/ProjectName/ pattern (two-part path)
+  var twoPartPattern = /\/([^\/]+)\/([^\/]+)\/?/;
+  var twoPartMatch = input.match(twoPartPattern);
+
+  if (twoPartMatch) {
+    var clientName = twoPartMatch[1];
+    var projectName = twoPartMatch[2];
+
+    // Find client (case insensitive)
+    var foundClient = null;
+    for (var clientId in ttData.clients) {
+      if (ttData.clients[clientId].name.toLowerCase() === clientName.toLowerCase()) {
+        foundClient = ttData.clients[clientId];
+        break;
+      }
+    }
+
+    if (foundClient) {
+      // Find project within client (case insensitive)
+      var foundProject = null;
+      if (foundClient.projects) {
+        for (var projectId in foundClient.projects) {
+          if (foundClient.projects[projectId].name.toLowerCase() === projectName.toLowerCase()) {
+            foundProject = foundClient.projects[projectId];
+            break;
+          }
+        }
+      }
+
+      if (foundProject) {
+        // Remove the path from task name
+        var cleanName = input.replace(twoPartMatch[0], '').trim();
+        return {
+          name: cleanName,
+          client: foundClient,
+          project: foundProject
+        };
+      }
+    }
+  }
+
+  // Try single-part pattern /ProjectName/ when a client is already selected
+  var onePartPattern = /\/([^\/]+)\/?/;
+  var onePartMatch = input.match(onePartPattern);
+
+  if (onePartMatch && current_client && typeof current_client === 'object' && current_client.id) {
+    var projectName = onePartMatch[1];
+
+    // Find project within current client (case insensitive)
+    var foundProject = null;
+    if (current_client.projects) {
+      for (var projectId in current_client.projects) {
+        if (current_client.projects[projectId].name.toLowerCase() === projectName.toLowerCase()) {
+          foundProject = current_client.projects[projectId];
+          break;
+        }
+      }
+    }
+
+    if (foundProject) {
+      // Remove the path from task name
+      var cleanName = input.replace(onePartMatch[0], '').trim();
+      return {
+        name: cleanName,
+        client: current_client,
+        project: foundProject
+      };
+    }
+  }
+
+  return { name: input, client: null, project: null };
+}
+
 // Load Node HTTP module, if available
 if(typeof require === "function"){
   var http = require('http');
@@ -312,6 +781,13 @@ function ttInit(){
         dbg(document.activeElement,'Active element');
 
         if(document.activeElement.id == 'new-task-input'){
+           // Check if autocomplete is handling this Enter key
+           var autocompleteDropdown = gebi('task-autocomplete');
+           if (autocompleteDropdown && autocompleteDropdown.style.display === 'block'
+               && taskAutocomplete.selectedIndex >= 0) {
+             // Let autocomplete handle it - don't save task
+             return false;
+           }
            saveNewTask();
         }else if(document.activeElement.id == 'add-project-input'){
            saveProject();
@@ -349,7 +825,12 @@ function ttInit(){
    }
 
 
-   synchToServer();
+   if(getSetting("auto_synch") == "yes"){
+     synchToServer();
+   }
+
+   // Initialize task autocomplete
+   taskAutocomplete.init();
 
 }
 
@@ -596,6 +1077,26 @@ function saveNewTask(projectId,task_name){
   var parsed = parseEstimateFromInput(task_name);
   task_name = parsed.name;
 
+  // Parse client/project from task name if present (e.g., "/Client/Project/task name")
+  var parsedPath = parseClientProjectFromInput(task_name);
+  task_name = parsedPath.name;
+
+  // If a client/project was parsed, use it instead of current selection
+  if (parsedPath.project) {
+    current_client = parsedPath.client;
+    current_project = parsedPath.project;
+  } else if (!current_project || current_project === 'all' || typeof current_project !== 'object' || !current_project.id) {
+    // No project selected or parsed - cannot save
+    setFeedback('Please select a project or use /Client/Project/ syntax', 'error');
+    return;
+  }
+
+  // Validate task name is not empty
+  if (!task_name || task_name.trim() === '') {
+    setFeedback('Please enter a task name', 'error');
+    return;
+  }
+
   var new_task = {
     'id' : newId(task_name,'task'),
     'name' : task_name,
@@ -721,17 +1222,18 @@ function continueSession(){
 
 
 
-function endSession(){
+function endSession(markComplete){
 
   clearInterval(counterId);
+  window.removeEventListener('resize', fitDurationText);
 
   current_session.end_time = moment().format("YYYY-MM-DD HH:mm:ss");
 
   current_session.notes = $("#session-notes-input").val();
 
-  if(document.getElementById("task-complete-input").checked == true){
+  if(markComplete){
     current_task.status = "completed";
-    task_complete_feedback = " <b>Task complete!<b>";
+    task_complete_feedback = " <b>Task complete!</b>";
     feedback_class = "success";
   }else{
     current_task.status = "inProcess";
@@ -771,17 +1273,82 @@ function endSession(){
 
 function showInSession(){
 
-  gebi('active-session').innerHTML =  '<div class="centered-box"><div id="current-info"><b>'+current_client.name+'</b> > <b>'+current_project.name+'</b> > <b>'+current_task.name+'</b></div><div id="current_duration"><span style="color:#dddddd">00:00:00</span></div><input type="text" id="session-notes-input" placeholder="Add notes" /><div><input type="checkbox"  id="task-complete-input"/><label for="task-complete-input">Task complete</label></div><a class="button" onClick="endSession()">End Session</a></div>';
+  // Build estimate display if task has an estimate
+  var estimateHtml = '';
+  if(current_task.estimate && current_task.estimate > 0){
+    var estimateDisplay = prettyTime(current_task.estimate);
+    estimateHtml = '<div id="session-estimate">' +
+      '<span class="estimate-label">EST</span>' +
+      '<span class="estimate-value">' + estimateDisplay + '</span>' +
+      '</div>';
+  }
+
+  var html = '<div class="centered-box">' +
+    '<div id="current-info">' +
+      '<b>' + current_client.name + '</b> > <b>' + current_project.name + '</b> > <b>' + current_task.name + '</b>' +
+    '</div>' +
+    '<div id="current_duration"><span style="color:#dddddd">00:00:00</span></div>' +
+    estimateHtml +
+    '<div id="session-buttons">' +
+      '<a class="button session-end-btn" onClick="endSession(false)">End&nbsp;Session</a>' +
+      '<a class="button session-complete-btn" onClick="endSession(true)">Task&nbsp;Complete</a>' +
+    '</div>' +
+    '<input type="text" id="session-notes-input" placeholder="Add notes..." />' +
+  '</div>';
+
+  gebi('active-session').innerHTML = html;
   gebi('active-session').style.display = 'block';
+
+  // Fit duration text to container and set up resize listener
+  setTimeout(fitDurationText, 10); // Small delay to ensure DOM is rendered
+  window.addEventListener('resize', fitDurationText);
 
 }
 
+
+function fitDurationText(){
+  var container = document.getElementById('current_duration');
+  if(!container) return;
+
+  // Reset font size first to get accurate container width
+  container.style.fontSize = '10px';
+
+  // Get container width from the centered-box parent
+  var containerWidth = container.parentElement.offsetWidth * 0.9; // 90% of parent width
+
+  // Create a temporary span to measure text width
+  var testSpan = document.createElement('span');
+  testSpan.style.visibility = 'hidden';
+  testSpan.style.position = 'absolute';
+  testSpan.style.whiteSpace = 'nowrap';
+  testSpan.style.fontFamily = 'sans-serif';
+  testSpan.style.fontWeight = 'bold';
+  testSpan.innerHTML = '00:00:00'; // Always use fixed reference string
+  document.body.appendChild(testSpan);
+
+  // Binary search for the right font size
+  var minSize = 10;
+  var maxSize = 300;
+  while(maxSize - minSize > 1){
+    var fontSize = Math.floor((minSize + maxSize) / 2);
+    testSpan.style.fontSize = fontSize + 'px';
+    if(testSpan.offsetWidth > containerWidth){
+      maxSize = fontSize;
+    } else {
+      minSize = fontSize;
+    }
+  }
+
+  document.body.removeChild(testSpan);
+  container.style.fontSize = minSize + 'px';
+}
 
 function incrementCurrentDuration() {
 
     currentDurationSeconds = moment().diff(startDate)/1000;
     currentDuration = timeFromSeconds(currentDurationSeconds);
     document.getElementById('current_duration').innerHTML = currentDuration;
+    fitDurationText();
     document.title = currentDuration + ' - Timetracker';
 
     // Check estimate thresholds if task has an estimate
@@ -1317,6 +1884,8 @@ function setView(view){
       currentView = taskList;
     }else if(view == "settingsView"){
       currentView = settingsView;
+    }else if(view == "todayView"){
+      currentView = todayView;
     }
 
     viewElements = document.getElementsByClassName("view-container");
@@ -1882,11 +2451,8 @@ taskList.refresh = function(){
 
    listContainer.innerHTML = '';
 
-   if(gebi("project-select").value != "all" && gebi("project-select").value != ""){
-     addTaskForm.style.display = "block";
-   }else{
-     addTaskForm.style.display = "none";
-   }
+   // Task input is always visible (supports inline client/project via autocomplete)
+   addTaskForm.style.display = "block";
 
    listContainer.appendChild(addTaskForm);
    listContainer.appendChild(templateEl);
@@ -2426,6 +2992,183 @@ settingsView.save = function(){
 }
 
 
+/* ################################ TODAY VIEW ################################ */
+
+todayView.show = function(){
+  // Hide client/project controls - not needed for today view
+  gebi("client-project-controls").style.display = "none";
+
+  // Initialize task containers
+  todayView.morningTasks = [];
+  todayView.starredTasks = [];
+  todayView.eveningTasks = [];
+
+  // Register event watchers
+  addEventWatcher('task', 'updated', function(){
+    todayView.update();
+  }, 'todayView');
+
+  addEventWatcher('task', 'added', function(){
+    todayView.update();
+  }, 'todayView');
+
+  addEventWatcher('task', 'deleted', function(){
+    todayView.update();
+  }, 'todayView');
+
+  addEventWatcher('server', 'synch', function(){
+    todayView.update();
+  }, 'todayView');
+
+  todayView.update();
+};
+
+todayView.hide = function(){
+  removeEventWatchers('todayView');
+
+  // Show client/project controls again
+  gebi("client-project-controls").style.display = "block";
+};
+
+todayView.filter = function(){
+  todayView.morningTasks = [];
+  todayView.starredTasks = [];
+  todayView.eveningTasks = [];
+
+  // Track task IDs already categorized to avoid duplicates
+  var categorizedIds = {};
+
+  loopData([], function(){
+    if(this.level == "task"){
+      var task = this.task;
+
+      // Skip completed tasks
+      if(task.status == "completed"){
+        return;
+      }
+
+      // Add metadata for display
+      task.truncateName = truncate(task.name, 55);
+      task.client = this.client.name;
+      task.project = this.project.name;
+
+      if(task.project && task.client){
+        task.metaParentage = "<span>" + task.client + " > " + task.project + "</span>";
+      } else if(task.project){
+        task.metaParentage = "<span>" + task.project + "</span>";
+      } else {
+        task.metaParentage = "";
+      }
+
+      // Calculate time
+      task.time = 0;
+      for(var sid in task.sessions){
+        var session = task.sessions[sid];
+        if(session.start_time && session.end_time){
+          task.time += timeDiffSecsFromString(session.start_time, session.end_time);
+        }
+      }
+      task.metaPrettyTime = (task.time > 0) ? " | " + prettyTime(task.time) : "";
+
+      // Check for morning tasks (#daily + #morning in name)
+      if(taskHasTags(task, ["daily", "morning"])){
+        todayView.morningTasks.push(task);
+        categorizedIds[task.id] = true;
+        return;
+      }
+
+      // Check for evening tasks (#daily + #evening in name)
+      if(taskHasTags(task, ["daily", "evening"])){
+        todayView.eveningTasks.push(task);
+        categorizedIds[task.id] = true;
+        return;
+      }
+
+      // Check for starred tasks (not already categorized)
+      if(task.starred == "1" && !categorizedIds[task.id]){
+        todayView.starredTasks.push(task);
+        categorizedIds[task.id] = true;
+      }
+    }
+  });
+};
+
+todayView.createTaskElement = function(task){
+  var taskDiv = document.createElement("div");
+  taskDiv.className = "today-task-item";
+  taskDiv.setAttribute("data-task-id", task.id);
+
+  // Checkbox for completion
+  var checkedAttr = (task.status == "completed") ? "checked" : "";
+  var checkCompleted = "<input type='checkbox' class='task-checkbox' " +
+    checkedAttr + " onChange=\"setTaskComplete('" + task.id + "', this)\" />";
+
+  // Star icon
+  var starClass = (task.starred == "1") ? "starred" : "";
+  var starIcon = "<i class='fa fa-star task-star " + starClass +
+    "' onClick=\"toggleTaskStar('" + task.id + "')\"></i>";
+
+  // Play button
+  var playIcon = "<i onClick=\"startGeneralSession('" + task.id +
+    "')\" style='cursor:pointer; color:#77aa88;' class='fa fa-play-circle fa-lg'></i>";
+
+  taskDiv.innerHTML =
+    "<div class='today-task-content' onDblClick=\"showGeneralEditForm('task','" + task.id + "')\">" +
+      "<div class='today-task-main'>" +
+        checkCompleted + " " + starIcon + " " + task.truncateName +
+        "<span class='task-meta'>" + task.metaParentage + task.metaPrettyTime + "</span>" +
+      "</div>" +
+      "<div class='today-task-actions'>" + playIcon + "</div>" +
+    "</div>";
+
+  return taskDiv;
+};
+
+todayView.refresh = function(){
+  var morningContainer = gebi("today-morning-tasks");
+  var starredContainer = gebi("today-starred-tasks");
+  var eveningContainer = gebi("today-evening-tasks");
+  var noTasksMsg = gebi("today-no-tasks");
+
+  // Clear containers
+  morningContainer.innerHTML = "";
+  starredContainer.innerHTML = "";
+  eveningContainer.innerHTML = "";
+
+  // Render morning tasks
+  todayView.morningTasks.forEach(function(task){
+    morningContainer.appendChild(todayView.createTaskElement(task));
+  });
+
+  // Render starred tasks
+  todayView.starredTasks.forEach(function(task){
+    starredContainer.appendChild(todayView.createTaskElement(task));
+  });
+
+  // Render evening tasks
+  todayView.eveningTasks.forEach(function(task){
+    eveningContainer.appendChild(todayView.createTaskElement(task));
+  });
+
+  // Show/hide sections based on content
+  gebi("today-morning-section").style.display =
+    todayView.morningTasks.length > 0 ? "block" : "none";
+  gebi("today-starred-section").style.display =
+    todayView.starredTasks.length > 0 ? "block" : "none";
+  gebi("today-evening-section").style.display =
+    todayView.eveningTasks.length > 0 ? "block" : "none";
+
+  // Show "no tasks" message if all sections empty
+  var totalTasks = todayView.morningTasks.length +
+                   todayView.starredTasks.length +
+                   todayView.eveningTasks.length;
+  noTasksMsg.style.display = (totalTasks === 0) ? "block" : "none";
+};
+
+todayView.update = function(){
+  todayView.filter();
+  todayView.refresh();
+};
 
 
 
@@ -3473,6 +4216,40 @@ function parseEstimateFromInput(input) {
     name: input,
     estimate: 0
   };
+}
+
+/**
+ * Extract hashtags from a string
+ * @param {string} text - The text to parse (e.g., task name)
+ * @returns {array} - Array of lowercase tag names without the # symbol
+ */
+function extractTags(text){
+  if(!text || typeof text !== "string"){
+    return [];
+  }
+  var tagRegex = /#([a-zA-Z0-9_]+)/g;
+  var tags = [];
+  var match;
+  while((match = tagRegex.exec(text)) !== null){
+    tags.push(match[1].toLowerCase());
+  }
+  return tags;
+}
+
+/**
+ * Check if a task has all specified tags (parsed from task name)
+ * @param {object} task - The task object
+ * @param {array} requiredTags - Array of tag names to check for
+ * @returns {boolean} - True if task has ALL required tags
+ */
+function taskHasTags(task, requiredTags){
+  var taskTags = extractTags(task.name);
+  for(var i = 0; i < requiredTags.length; i++){
+    if(taskTags.indexOf(requiredTags[i].toLowerCase()) === -1){
+      return false;
+    }
+  }
+  return true;
 }
 
 function gebi(id){

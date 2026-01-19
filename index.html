@@ -35,6 +35,9 @@
 
         <a href="#void" class="view-switch" onClick="setView('taskList')"><i class="fa fa-clock-o fa-lg"></i><span>
   Track</span></a>
+
+        <a href="#void" class="view-switch" onClick="setView('todayView')"><i class="fa fa-calendar-check-o fa-lg"></i><span>
+  Today</span></a>
         </div>
 
 
@@ -100,7 +103,10 @@
 
                   <form method="post" id="task-form" action="">
                     <div class="glommed-field-div">
-                      <input type="text" class="button-end-field" id="new-task-input" name="new-task-input" placeholder="Add new task" /><a href="#void" onClick="saveNewTask()" class="button field-end-button" id="save-new-task-button">Save</a>
+                      <div id="autocomplete-container">
+                        <input type="text" class="button-end-field" id="new-task-input" name="new-task-input" placeholder="Add new task (use / for client/project)" autocomplete="off" />
+                        <div id="task-autocomplete"></div>
+                      </div><a href="#void" onClick="saveNewTask()" class="button field-end-button" id="save-new-task-button">Save</a>
                     </div>
                   </form>
 
@@ -168,6 +174,44 @@
 
       </div>
 
+
+      <!-- Today View -->
+      <div id="todayView-view" class="view-container" style="display: none">
+        <h3>Today</h3>
+
+        <div id="today-morning-section" class="today-section">
+          <div class="today-section-header">
+            <i class="fa fa-sun-o"></i> Morning
+          </div>
+          <div class="today-section-tasks" id="today-morning-tasks">
+            <!-- Morning tasks rendered here -->
+          </div>
+        </div>
+
+        <div id="today-starred-section" class="today-section">
+          <div class="today-section-header">
+            <i class="fa fa-star"></i> Starred
+          </div>
+          <div class="today-section-tasks" id="today-starred-tasks">
+            <!-- Starred tasks rendered here -->
+          </div>
+        </div>
+
+        <div id="today-evening-section" class="today-section">
+          <div class="today-section-header">
+            <i class="fa fa-moon-o"></i> Evening
+          </div>
+          <div class="today-section-tasks" id="today-evening-tasks">
+            <!-- Evening tasks rendered here -->
+          </div>
+        </div>
+
+        <div id="today-no-tasks" style="display: none;">
+          <div style="font-size: 1.2em; color: #aaa; text-align: center; padding: 20px;">
+            No tasks for today. Add #daily #morning or #daily #evening tags to task names.
+          </div>
+        </div>
+      </div>
 
       <!-- Analyze -->
       <div id="analyze-view"  class="view-container" style="display: none">
